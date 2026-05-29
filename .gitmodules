@@ -1,0 +1,3 @@
+[submodule "3rdparty/fadec"]
+	path = 3rdparty/fadec
+	url = https://github.com/aengelke/fadec.git
