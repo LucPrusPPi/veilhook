@@ -34,7 +34,8 @@ public:
     // Fast path using fadec
     Instruction decode_fast(uint8_t* address) {
         FdInstr fd_instr;
-        int len = fd_decode(address, 15, 64, address, &fd_instr);
+        // signature: int fd_decode(const uint8_t* buf, size_t len, int mode, uintptr_t address, FdInstr* out_instr)
+        int len = fd_decode(address, 15, 64, reinterpret_cast<uintptr_t>(address), &fd_instr);
         
         Instruction inst{};
         inst.address = address;
@@ -46,8 +47,11 @@ public:
         inst.is_ret = (type == FDI_RET || type == FDI_RETF);
 
         if (inst.is_branch || inst.is_call) {
-            if (fd_instr.operands[0].type == FD_OT_JMP) {
-                 inst.absolute_target = reinterpret_cast<uintptr_t>(address) + len + fd_instr.operands[0].val;
+            // New fadec prefers FD_OT_OFF for jumps and FD_OP_IMM handles them, 
+            // but we can check if it's an immediate/offset and calculate target.
+            // fd_instr.operands[0].type is fetched via FD_OP_TYPE(&fd_instr, 0)
+            if (FD_OP_TYPE(&fd_instr, 0) == FD_OT_OFF || FD_OP_TYPE(&fd_instr, 0) == FD_OT_IMM) {
+                 inst.absolute_target = reinterpret_cast<uintptr_t>(address) + len + FD_OP_IMM(&fd_instr, 0);
             }
         }
         
