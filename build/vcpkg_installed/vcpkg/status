@@ -1,0 +1,42 @@
+Package: vcpkg-cmake-config
+Version: 2024-05-23
+Architecture: x64-windows
+Multi-Arch: same
+Abi: c7a3eae538da410c694f50ee578095a41bad17953080d737e759328063e5b9f7
+Status: install ok installed
+
+Package: vcpkg-cmake
+Version: 2024-04-23
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 113cdccaee9c40bbd9ef2c5fc6170b3400578b40b8fbf89f6662fd284a529fd4
+Status: install ok installed
+
+Package: zycore
+Version: 1.5.2
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 5b021e8900833601a439ece829a9fcc0be4bb7137c64ec11c0275b761c853aca
+Description: Provides platform independent types, macros and a fallback for environments without LibC.
+Status: install ok installed
+
+Package: zydis
+Version: 4.1.1
+Port-Version: 1
+Depends: vcpkg-cmake, vcpkg-cmake-config, zycore
+Architecture: x64-windows
+Multi-Arch: same
+Abi: cfc489763fdffaacf474e5926aece081759adba7d92a50e50ccd9b95dc5bc65d
+Description: Fast and lightweight x86/x86-64 disassembler library.
+Status: install ok installed
+
+Package: asmjit
+Version: 2025-10-13
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: e1e3a870f3b6d2433e02ab09f070d5bd93bec9ad795768dfd3be32ece3046910
+Description: AsmJit is a lightweight library for machine code generation written in C++ language
+Status: install ok installed
+

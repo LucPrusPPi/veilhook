@@ -1,0 +1,54 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="D:\FastFarmer\veilhook\3rdparty\fadec\decode.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\FastFarmer\veilhook\3rdparty\fadec\format.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\FastFarmer\veilhook\3rdparty\fadec\encode.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="D:\FastFarmer\veilhook\3rdparty\fadec\fadec.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\FastFarmer\veilhook\3rdparty\fadec\fadec-enc.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\FastFarmer\veilhook\build\3rdparty\fadec\include\fadec-decode-public.inc">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\FastFarmer\veilhook\build\3rdparty\fadec\include\fadec-encode-public.inc">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\FastFarmer\veilhook\build\3rdparty\fadec\include\fadec-decode-private.inc">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\FastFarmer\veilhook\build\3rdparty\fadec\include\fadec-encode-private.inc">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="D:\FastFarmer\veilhook\build\CMakeFiles\109583cef393912e2de92feacc28cf07\fadec-decode-private.inc.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="D:\FastFarmer\veilhook\build\CMakeFiles\109583cef393912e2de92feacc28cf07\fadec-encode-private.inc.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="D:\FastFarmer\veilhook\3rdparty\fadec\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{1C6CFE89-002D-32D9-B653-0813D950729C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{BA885E28-F557-3B60-862F-DE9070F8545A}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{BCFAFC0B-0316-3CD7-960A-6749C23329B1}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

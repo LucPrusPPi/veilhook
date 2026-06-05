@@ -36,6 +36,9 @@ private:
     uint8_t* trampoline_ = nullptr;
     size_t trampoline_size_ = 0;
     
+    std::vector<uint8_t> original_bytes_;
+    size_t patch_size_ = 0;
+    
     // Needs static/global registry mapping trampoline back to Mid instance 
     // because the shellcode can only easily call a global function pointer.
     static void __stdcall dispatch_callback(Context* ctx, Mid* instance);

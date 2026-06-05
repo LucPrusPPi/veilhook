@@ -1,0 +1,8 @@
+{
+	"InstallScripts" : 
+	[
+		"D:/FastFarmer/veilhook/build/cmake_install.cmake",
+		"D:/FastFarmer/veilhook/build/3rdparty/fadec/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

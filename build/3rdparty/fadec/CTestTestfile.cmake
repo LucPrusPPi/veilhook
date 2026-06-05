@@ -1,0 +1,36 @@
+# CMake generated Testfile for 
+# Source directory: D:/FastFarmer/veilhook/3rdparty/fadec
+# Build directory: D:/FastFarmer/veilhook/build/3rdparty/fadec
+# 
+# This file includes the relevant testing commands required for 
+# testing this directory and lists subdirectories to be tested as well.
+if(CTEST_CONFIGURATION_TYPE MATCHES "^([Dd][Ee][Bb][Uu][Gg])$")
+  add_test([=[decode]=] "D:/FastFarmer/veilhook/build/3rdparty/fadec/Debug/fadec-decode-test.exe")
+  set_tests_properties([=[decode]=] PROPERTIES  _BACKTRACE_TRIPLES "D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;87;add_test;D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;97;fadec_component;D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;0;")
+elseif(CTEST_CONFIGURATION_TYPE MATCHES "^([Rr][Ee][Ll][Ee][Aa][Ss][Ee])$")
+  add_test([=[decode]=] "D:/FastFarmer/veilhook/build/3rdparty/fadec/Release/fadec-decode-test.exe")
+  set_tests_properties([=[decode]=] PROPERTIES  _BACKTRACE_TRIPLES "D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;87;add_test;D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;97;fadec_component;D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;0;")
+elseif(CTEST_CONFIGURATION_TYPE MATCHES "^([Mm][Ii][Nn][Ss][Ii][Zz][Ee][Rr][Ee][Ll])$")
+  add_test([=[decode]=] "D:/FastFarmer/veilhook/build/3rdparty/fadec/MinSizeRel/fadec-decode-test.exe")
+  set_tests_properties([=[decode]=] PROPERTIES  _BACKTRACE_TRIPLES "D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;87;add_test;D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;97;fadec_component;D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;0;")
+elseif(CTEST_CONFIGURATION_TYPE MATCHES "^([Rr][Ee][Ll][Ww][Ii][Tt][Hh][Dd][Ee][Bb][Ii][Nn][Ff][Oo])$")
+  add_test([=[decode]=] "D:/FastFarmer/veilhook/build/3rdparty/fadec/RelWithDebInfo/fadec-decode-test.exe")
+  set_tests_properties([=[decode]=] PROPERTIES  _BACKTRACE_TRIPLES "D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;87;add_test;D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;97;fadec_component;D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;0;")
+else()
+  add_test([=[decode]=] NOT_AVAILABLE)
+endif()
+if(CTEST_CONFIGURATION_TYPE MATCHES "^([Dd][Ee][Bb][Uu][Gg])$")
+  add_test([=[encode]=] "D:/FastFarmer/veilhook/build/3rdparty/fadec/Debug/fadec-encode-test.exe")
+  set_tests_properties([=[encode]=] PROPERTIES  _BACKTRACE_TRIPLES "D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;87;add_test;D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;100;fadec_component;D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;0;")
+elseif(CTEST_CONFIGURATION_TYPE MATCHES "^([Rr][Ee][Ll][Ee][Aa][Ss][Ee])$")
+  add_test([=[encode]=] "D:/FastFarmer/veilhook/build/3rdparty/fadec/Release/fadec-encode-test.exe")
+  set_tests_properties([=[encode]=] PROPERTIES  _BACKTRACE_TRIPLES "D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;87;add_test;D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;100;fadec_component;D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;0;")
+elseif(CTEST_CONFIGURATION_TYPE MATCHES "^([Mm][Ii][Nn][Ss][Ii][Zz][Ee][Rr][Ee][Ll])$")
+  add_test([=[encode]=] "D:/FastFarmer/veilhook/build/3rdparty/fadec/MinSizeRel/fadec-encode-test.exe")
+  set_tests_properties([=[encode]=] PROPERTIES  _BACKTRACE_TRIPLES "D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;87;add_test;D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;100;fadec_component;D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;0;")
+elseif(CTEST_CONFIGURATION_TYPE MATCHES "^([Rr][Ee][Ll][Ww][Ii][Tt][Hh][Dd][Ee][Bb][Ii][Nn][Ff][Oo])$")
+  add_test([=[encode]=] "D:/FastFarmer/veilhook/build/3rdparty/fadec/RelWithDebInfo/fadec-encode-test.exe")
+  set_tests_properties([=[encode]=] PROPERTIES  _BACKTRACE_TRIPLES "D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;87;add_test;D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;100;fadec_component;D:/FastFarmer/veilhook/3rdparty/fadec/CMakeLists.txt;0;")
+else()
+  add_test([=[encode]=] NOT_AVAILABLE)
+endif()

@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="D:\FastFarmer\veilhook\build\CMakeFiles\3e32a8dd2bc58e81990adb9ade058cf9\INSTALL_force.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{1C6CFE89-002D-32D9-B653-0813D950729C}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

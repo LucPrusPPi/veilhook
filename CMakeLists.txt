@@ -9,8 +9,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Add fadec submodule
 add_subdirectory(3rdparty/fadec)
 
-# Zydis from vcpkg
+# Zydis and asmjit from vcpkg
 find_package(zydis CONFIG REQUIRED)
+find_package(asmjit CONFIG REQUIRED)
 
 # The static library
 add_library(veilhook STATIC)
@@ -35,6 +36,7 @@ target_include_directories(veilhook PUBLIC
 target_link_libraries(veilhook PRIVATE
     fadec
     Zydis::Zydis
+    asmjit::asmjit
 )
 
 # Tests executable
