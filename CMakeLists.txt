@@ -33,10 +33,10 @@ target_include_directories(veilhook PUBLIC
 )
 
 # Dependencies
-target_link_libraries(veilhook PRIVATE
-    fadec
-    Zydis::Zydis
-    asmjit::asmjit
+target_link_libraries(veilhook 
+    PUBLIC fadec
+    PUBLIC Zydis::Zydis
+    PRIVATE asmjit::asmjit
 )
 
 # Tests executable

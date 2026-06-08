@@ -1,19 +1,16 @@
 #include <veilhook/hook/inline.hpp>
 #include <veilhook/cave_alloc.hpp>
 #include <veilhook/decode.hpp>
+#include <asmjit/asmjit.h>
 #include <tlhelp32.h>
 #include <stdexcept>
+#include <cstring>
+#include <iostream>
 
 namespace veilhook::hook {
 
-Inline::Inline(uintptr_t target, uintptr_t destination)
-    : target_(target), destination_(destination) {}
-
-Inline::~Inline() {
-    uninstall();
-}
-
-bool Inline::suspend_threads_and_patch(const std::vector<uint8_t>& patch_bytes) {
+// Private suspension logic shared between inline and mid
+static bool suspend_threads_and_patch(uintptr_t target, size_t patch_size, const std::vector<uint8_t>& patch_bytes, uint8_t* trampoline) {
     HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
     if (snapshot == INVALID_HANDLE_VALUE) return false;
 
@@ -24,7 +21,6 @@ bool Inline::suspend_threads_and_patch(const std::vector<uint8_t>& patch_bytes) 
     THREADENTRY32 te32;
     te32.dwSize = sizeof(te32);
 
-    // Suspend threads
     if (Thread32First(snapshot, &te32)) {
         do {
             if (te32.th32OwnerProcessID == current_process_id && te32.th32ThreadID != current_thread_id) {
@@ -38,34 +34,26 @@ bool Inline::suspend_threads_and_patch(const std::vector<uint8_t>& patch_bytes) 
     }
     CloseHandle(snapshot);
 
-    // Apply Patch
     DWORD old_protect;
     bool success = false;
-    if (VirtualProtect(reinterpret_cast<void*>(target_), patch_bytes.size(), PAGE_EXECUTE_READWRITE, &old_protect)) {
-        
-        // Before patching, fix any threads that might be executing in the patch window
+    if (VirtualProtect(reinterpret_cast<void*>(target), patch_bytes.size(), PAGE_EXECUTE_READWRITE, &old_protect)) {
         for (HANDLE hThread : suspended_threads) {
             CONTEXT ctx{};
             ctx.ContextFlags = CONTEXT_CONTROL;
             if (GetThreadContext(hThread, &ctx)) {
-                if (ctx.Rip >= target_ && ctx.Rip < target_ + patch_size_) {
-                    // Thread is caught in the crossfire!
-                    // Fix RIP to point to the trampoline's equivalent offset
-                    size_t offset = ctx.Rip - target_;
-                    ctx.Rip = reinterpret_cast<uintptr_t>(trampoline_) + offset;
+                if (ctx.Rip >= target && ctx.Rip < target + patch_size) {
+                    size_t offset = ctx.Rip - target;
+                    ctx.Rip = reinterpret_cast<uintptr_t>(trampoline) + offset;
                     SetThreadContext(hThread, &ctx);
                 }
             }
         }
 
-        // Batch write the patch
-        std::memcpy(reinterpret_cast<void*>(target_), patch_bytes.data(), patch_bytes.size());
-        
-        VirtualProtect(reinterpret_cast<void*>(target_), patch_bytes.size(), old_protect, &old_protect);
+        std::memcpy(reinterpret_cast<void*>(target), patch_bytes.data(), patch_bytes.size());
+        VirtualProtect(reinterpret_cast<void*>(target), patch_bytes.size(), old_protect, &old_protect);
         success = true;
     }
 
-    // Resume threads
     for (HANDLE hThread : suspended_threads) {
         ResumeThread(hThread);
         CloseHandle(hThread);
@@ -74,61 +62,134 @@ bool Inline::suspend_threads_and_patch(const std::vector<uint8_t>& patch_bytes) 
     return success;
 }
 
+Inline::Inline(uintptr_t target, uintptr_t destination)
+    : target_(target), destination_(destination) {}
+
+Inline::~Inline() {
+    uninstall();
+}
+
 bool Inline::install() {
     if (is_installed_) return true;
 
     decode::InstructionView decoder;
     
-    // We need at least 5 bytes for a rel32 jump, or 14 bytes for an absolute jump
-    // We'll aim for 5 bytes assuming CaveAlloc gives us near memory.
+    // Find boundary size to fit a near JMP (5 bytes)
     patch_size_ = decoder.get_boundary_length(reinterpret_cast<uint8_t*>(target_), 5);
-    
     if (patch_size_ == 0) return false;
-
-    // Allocate trampoline (+5 for jmp back)
-    trampoline_size_ = patch_size_ + 14; // Over-allocate slightly for potential far jump back
-    trampoline_ = mem::CaveAlloc::get().allocate(target_, trampoline_size_);
-    
-    if (!trampoline_) return false;
 
     original_bytes_.resize(patch_size_);
     std::memcpy(original_bytes_.data(), reinterpret_cast<void*>(target_), patch_size_);
 
-    // Copy original prologue to trampoline
-    std::memcpy(trampoline_, original_bytes_.data(), patch_size_);
+    // We over-allocate the trampoline to ensure we have enough space for the re-encoded instructions
+    trampoline_size_ = patch_size_ + 128; 
+    trampoline_ = mem::CaveAlloc::get().allocate(target_, trampoline_size_);
     
-    // Simplistic fixup for RIP-relative in the trampoline
-    // A proper implementation would use Fadec/Zydis to fix up rip-relative displacements here.
-    // For MVP, if it's rip-relative, we just blindly copy and hope it wasn't RIP-rel (or add fixups later).
-    
-    // Write jump back to target + patch_size
-    uint8_t* jmp_back_addr = trampoline_ + patch_size_;
-    uintptr_t return_target = target_ + patch_size_;
-    
-    // Write absolute jump back (mov rax, target; jmp rax) for simplicity
-    jmp_back_addr[0] = 0x48; jmp_back_addr[1] = 0xB8; // mov rax, imm64
-    *reinterpret_cast<uintptr_t*>(&jmp_back_addr[2]) = return_target;
-    jmp_back_addr[10] = 0xFF; jmp_back_addr[11] = 0xE0; // jmp rax
+    if (!trampoline_) return false;
 
+    // Use AsmJit to assemble the trampoline directly at the allocated base
+    asmjit::JitRuntime rt;
+    asmjit::CodeHolder code;
+    code.init(rt.environment(), reinterpret_cast<uint64_t>(trampoline_));
+    asmjit::x86::Assembler a(&code);
+
+    using namespace asmjit::x86;
+
+    // Save the pointer to the original callable trampoline
     original_callable_ = trampoline_;
 
-    // Prepare patch for original function
-    std::vector<uint8_t> patch(patch_size_, 0x90); // Fill with NOPs
+    // 1. Process and emit original instructions
+    uint8_t* current = original_bytes_.data();
+    size_t processed = 0;
+
+    while (processed < patch_size_) {
+        ZydisDecodedInstruction zydis_inst = decoder.decode_advanced(current);
+        if (zydis_inst.length == 0) break; 
+
+        // VERY BASIC RIP FIXUP for branching (Jmp/Call).
+        if (zydis_inst.meta.category == ZYDIS_CATEGORY_COND_BR || 
+            zydis_inst.meta.category == ZYDIS_CATEGORY_UNCOND_BR ||
+            zydis_inst.meta.category == ZYDIS_CATEGORY_CALL) {
+            
+            const ZydisDecodedOperand* op = nullptr;
+            for (int i = 0; i < zydis_inst.operand_count; ++i) {
+                // New Zydis interface requires accessing operands array separately if using the combined struct,
+                // or fetching them using ZydisDecoderDecodeOperands.
+                // Assuming standard Zydis 4.x decode, operands are in ZydisDecodedInstruction if decoded correctly,
+                // but actually the new API separates instruction and operands.
+                // We will decode operands properly here:
+                ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
+                ZydisDecoderDecodeOperands(&decoder.zydis_decoder(), nullptr, &zydis_inst, operands, zydis_inst.operand_count);
+                
+                if (operands[i].type == ZYDIS_OPERAND_TYPE_IMMEDIATE && operands[i].imm.is_relative) {
+                    op = &operands[i];
+                    
+                    uint64_t absolute_target = 0;
+                    ZydisCalcAbsoluteAddress(&zydis_inst, op, static_cast<uint64_t>(target_ + processed), &absolute_target);
+                    
+                    if (zydis_inst.meta.category == ZYDIS_CATEGORY_CALL) {
+                        a.mov(rax, absolute_target);
+                        a.call(rax);
+                    } else if (zydis_inst.meta.category == ZYDIS_CATEGORY_UNCOND_BR) {
+                        a.mov(rax, absolute_target);
+                        a.jmp(rax);
+                    } else {
+                        a.embed(current, zydis_inst.length);
+                    }
+                    break;
+                }
+            }
+
+            if (!op) {
+                a.embed(current, zydis_inst.length);
+            }
+        } else {
+            a.embed(current, zydis_inst.length);
+        }
+
+        current += zydis_inst.length;
+        processed += zydis_inst.length;
+    }
+
+    // 2. Add the jump back to the original function
+    a.mov(rax, target_ + patch_size_);
+    a.jmp(rax);
+
+    // Extract the generated code into the trampoline
+    asmjit::CodeBuffer& buffer = code.sectionById(0)->buffer();
     
-    int64_t rel_disp = destination_ - (target_ + 5);
-    if (std::abs(rel_disp) <= 0x7FFFFFFF) {
-        // Near jump
-        patch[0] = 0xE9;
-        *reinterpret_cast<int32_t*>(&patch[1]) = static_cast<int32_t>(rel_disp);
-    } else {
-        // We shouldn't hit this if the user uses a near trampoline, but if destination is far:
-        // We'd need 14 bytes for a far jump, which might exceed patch_size_.
-        // In a real framework, we'd use a relay trampoline allocated via CaveAlloc.
-        // Assuming destination is a near trampoline for MVP inline hooking.
+    if (buffer.size() > trampoline_size_) {
+        // This shouldn't happen with our buffer padding, but safe fallback
+        mem::CaveAlloc::get().deallocate(trampoline_, trampoline_size_);
         return false;
     }
 
-    if (suspend_threads_and_patch(patch)) {
+    // Write actual trampoline payload
+    std::memcpy(trampoline_, buffer.data(), buffer.size());
+
+    // Prepare the patch (JMP rel32)
+    std::vector<uint8_t> patch(patch_size_, 0x90); // NOP padding
+    
+    int64_t rel_disp = static_cast<int64_t>(destination_) - static_cast<int64_t>(target_ + 5);
+    if (std::abs(rel_disp) <= 0x7FFFFFFF) {
+        patch[0] = 0xE9; // JMP rel32
+        *reinterpret_cast<int32_t*>(&patch[1]) = static_cast<int32_t>(rel_disp);
+    } else {
+        // Fallback to far jump via an intermediate relay or direct inline if 14 bytes available
+        if (patch_size_ >= 14) {
+            patch[0] = 0xFF; patch[1] = 0x25; // jmp qword ptr [rip]
+            *reinterpret_cast<int32_t*>(&patch[2]) = 0;
+            *reinterpret_cast<uint64_t*>(&patch[6]) = destination_;
+        } else {
+            // No room for near or far jump directly, would need a relay. Out of MVP scope.
+            mem::CaveAlloc::get().deallocate(trampoline_, trampoline_size_);
+            trampoline_ = nullptr;
+            return false;
+        }
+    }
+
+    // Transactionally apply the patch and fix thread contexts
+    if (suspend_threads_and_patch(target_, patch_size_, patch, trampoline_)) {
         is_installed_ = true;
         return true;
     }
@@ -141,11 +202,10 @@ bool Inline::install() {
 bool Inline::uninstall() {
     if (!is_installed_) return true;
 
-    if (suspend_threads_and_patch(original_bytes_)) {
+    // Passing `trampoline_` doesn't make sense for uninstalls, we are restoring bytes.
+    // Our shared helper expects 4 args, for restore we pass nullptr or ignore rip migration
+    if (suspend_threads_and_patch(target_, patch_size_, original_bytes_, nullptr)) {
         is_installed_ = false;
-        
-        // Note: we might want to delay free or keep it around to avoid crashing threads
-        // that are currently executing the trampoline.
         mem::CaveAlloc::get().deallocate(trampoline_, trampoline_size_);
         trampoline_ = nullptr;
         return true;

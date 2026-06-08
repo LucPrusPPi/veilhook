@@ -35,7 +35,6 @@ private:
     size_t patch_size_ = 0;
     bool is_installed_ = false;
 
-    bool suspend_threads_and_patch(const std::vector<uint8_t>& patch_bytes);
 };
 
 } // namespace veilhook::hook

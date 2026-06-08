@@ -1,30 +1,11 @@
 Detecting compiler hash for triplet x64-windows...
 Compiler found: C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe
 The following packages are already installed:
+    asmjit:x64-windows@2025-10-13
   * vcpkg-cmake:x64-windows@2024-04-23
   * vcpkg-cmake-config:x64-windows@2024-05-23
   * zycore:x64-windows@1.5.2
     zydis:x64-windows@4.1.1#1
-The following packages will be built and installed:
-    asmjit:x64-windows@2025-10-13
-Restored 0 package(s) from C:\Users\Letalty\AppData\Local\vcpkg\archives in 30.5 us. Use --debug to see more details.
-Installing 1/1 asmjit:x64-windows@2025-10-13...
-asmjit:x64-windows@2025-10-13 package ABI: e1e3a870f3b6d2433e02ab09f070d5bd93bec9ad795768dfd3be32ece3046910
-Building asmjit:x64-windows@2025-10-13...
-Downloading https://github.com/asmjit/asmjit/archive/9eb6edbf711ceb25346ee40bae68b40a4505cdf5.tar.gz -> asmjit-asmjit-9eb6edbf711ceb25346ee40bae68b40a4505cdf5.tar.gz
-Successfully downloaded asmjit-asmjit-9eb6edbf711ceb25346ee40bae68b40a4505cdf5.tar.gz
--- Extracting source C:/Users/Letalty/AppData/Local/vcpkg/downloads/asmjit-asmjit-9eb6edbf711ceb25346ee40bae68b40a4505cdf5.tar.gz
--- Using source at C:/Users/Letalty/AppData/Local/vcpkg/buildtrees/asmjit/src/0a4505cdf5-6895dda6a6.clean
--- Configuring x64-windows
--- Building x64-windows-dbg
--- Building x64-windows-rel
--- Installing: C:/Users/Letalty/AppData/Local/vcpkg/packages/asmjit_x64-windows/share/asmjit/copyright
--- Performing post-build validation
-Starting submission of asmjit:x64-windows@2025-10-13 to 1 binary cache(s) in the background
-Elapsed time to handle asmjit:x64-windows: 31 s
-Installed contents are licensed to you by owners. Microsoft is not responsible for, nor does it grant any licenses to, third-party packages.
-Packages installed in this vcpkg installation declare the following licenses:
-Zlib
 asmjit provides CMake targets:
 
   # this is heuristically generated, and may not be correct
@@ -37,6 +18,4 @@ zydis provides CMake targets:
   find_package(zydis CONFIG REQUIRED)
   target_link_libraries(main PRIVATE Zydis::Zydis)
 
-Waiting for 1 remaining binary cache submissions...
-Completed submission of asmjit:x64-windows@2025-10-13 to 1 binary cache(s) in 547 ms (1/1)
-All requested installations completed successfully in: 31 s
+All requested installations completed successfully in: 202 us

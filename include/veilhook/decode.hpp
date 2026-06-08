@@ -78,6 +78,8 @@ public:
         return total_len;
     }
 
+    ZydisDecoder& zydis_decoder() { return zydis_decoder_; }
+
 private:
     ZydisDecoder zydis_decoder_;
 };
