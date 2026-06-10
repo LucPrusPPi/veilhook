@@ -18,4 +18,4 @@ zydis provides CMake targets:
   find_package(zydis CONFIG REQUIRED)
   target_link_libraries(main PRIVATE Zydis::Zydis)
 
-All requested installations completed successfully in: 202 us
+All requested installations completed successfully in: 268 us

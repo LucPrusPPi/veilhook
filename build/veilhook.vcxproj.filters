@@ -19,6 +19,9 @@
     <ClCompile Include="D:\FastFarmer\veilhook\source\hook_vmt.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="D:\FastFarmer\veilhook\source\syscalls.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="D:\FastFarmer\veilhook\CMakeLists.txt" />

@@ -319,6 +319,7 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     <ClCompile Include="D:\FastFarmer\veilhook\source\hook_inline.cpp" />
     <ClCompile Include="D:\FastFarmer\veilhook\source\hook_mid.cpp" />
     <ClCompile Include="D:\FastFarmer\veilhook\source\hook_vmt.cpp" />
+    <ClCompile Include="D:\FastFarmer\veilhook\source\syscalls.cpp" />
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>
