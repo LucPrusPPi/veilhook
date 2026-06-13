@@ -1,7 +1,11 @@
 #include <veilhook/hook/inline.hpp>
 #include <veilhook/cave_alloc.hpp>
 #include <veilhook/decode.hpp>
+#include <veilhook/syscalls.hpp>
+#include <veilhook/xorstr.hpp>
 #include <asmjit/asmjit.h>
+#include <Zydis/Zydis.h>
+#include <Zydis/Utils.h>
 #include <tlhelp32.h>
 #include <stdexcept>
 #include <cstring>
@@ -26,7 +30,8 @@ static bool suspend_threads_and_patch(uintptr_t target, size_t patch_size, const
             if (te32.th32OwnerProcessID == current_process_id && te32.th32ThreadID != current_thread_id) {
                 HANDLE hThread = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_SET_CONTEXT, FALSE, te32.th32ThreadID);
                 if (hThread) {
-                    SuspendThread(hThread);
+                    ULONG suspend_count;
+                    syscalls::nt_suspend_thread(hThread, &suspend_count);
                     suspended_threads.push_back(hThread);
                 }
             }
@@ -34,28 +39,35 @@ static bool suspend_threads_and_patch(uintptr_t target, size_t patch_size, const
     }
     CloseHandle(snapshot);
 
-    DWORD old_protect;
+    ULONG old_protect = 0;
     bool success = false;
-    if (VirtualProtect(reinterpret_cast<void*>(target), patch_bytes.size(), PAGE_EXECUTE_READWRITE, &old_protect)) {
+    PVOID base_addr = reinterpret_cast<PVOID>(target);
+    SIZE_T region_size = patch_bytes.size();
+
+    if (syscalls::nt_protect_virtual_memory(GetCurrentProcess(), &base_addr, &region_size, PAGE_EXECUTE_READWRITE, &old_protect) == syscalls::STATUS_SUCCESS) {
         for (HANDLE hThread : suspended_threads) {
             CONTEXT ctx{};
             ctx.ContextFlags = CONTEXT_CONTROL;
-            if (GetThreadContext(hThread, &ctx)) {
+            if (syscalls::nt_get_context_thread(hThread, &ctx) == syscalls::STATUS_SUCCESS) {
                 if (ctx.Rip >= target && ctx.Rip < target + patch_size) {
                     size_t offset = ctx.Rip - target;
                     ctx.Rip = reinterpret_cast<uintptr_t>(trampoline) + offset;
-                    SetThreadContext(hThread, &ctx);
+                    syscalls::nt_set_context_thread(hThread, &ctx);
                 }
             }
         }
 
         std::memcpy(reinterpret_cast<void*>(target), patch_bytes.data(), patch_bytes.size());
-        VirtualProtect(reinterpret_cast<void*>(target), patch_bytes.size(), old_protect, &old_protect);
+        
+        base_addr = reinterpret_cast<PVOID>(target);
+        region_size = patch_bytes.size();
+        syscalls::nt_protect_virtual_memory(GetCurrentProcess(), &base_addr, &region_size, old_protect, &old_protect);
         success = true;
     }
 
     for (HANDLE hThread : suspended_threads) {
-        ResumeThread(hThread);
+        ULONG suspend_count;
+        syscalls::nt_resume_thread(hThread, &suspend_count);
         CloseHandle(hThread);
     }
 

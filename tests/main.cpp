@@ -2,6 +2,7 @@
 #include <cassert>
 #include <windows.h>
 #include <veilhook/veilhook.hpp>
+#include <veilhook/syscalls.hpp>
 
 // --- VMT Hook Test ---
 class TargetClass {
@@ -139,6 +140,11 @@ void test_hwbp() {
 
 int main() {
     try {
+        if (!veilhook::syscalls::init()) {
+            std::cerr << "Failed to init syscalls!" << std::endl;
+            return 1;
+        }
+
         test_vmt_hook();
         test_inline_hook();
         test_mid_hook();
