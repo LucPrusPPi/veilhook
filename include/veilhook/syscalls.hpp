@@ -61,6 +61,19 @@ using NtResumeThreadFn = NTSTATUS(NTAPI*)(
     PULONG PreviousSuspendCount
 );
 
+typedef enum _MEMORY_INFORMATION_CLASS {
+    MemoryBasicInformation
+} MEMORY_INFORMATION_CLASS;
+
+using NtQueryVirtualMemoryFn = NTSTATUS(NTAPI*)(
+    HANDLE ProcessHandle,
+    PVOID BaseAddress,
+    MEMORY_INFORMATION_CLASS MemoryInformationClass,
+    PVOID MemoryInformation,
+    SIZE_T MemoryInformationLength,
+    PSIZE_T ReturnLength
+);
+
 // Our stealth wrapper functions:
 
 NTSTATUS nt_allocate_virtual_memory(
@@ -105,6 +118,15 @@ NTSTATUS nt_suspend_thread(
 NTSTATUS nt_resume_thread(
     HANDLE thread_handle,
     PULONG previous_suspend_count
+);
+
+NTSTATUS nt_query_virtual_memory(
+    HANDLE process_handle,
+    PVOID base_address,
+    MEMORY_INFORMATION_CLASS memory_information_class,
+    PVOID memory_information,
+    SIZE_T memory_information_length,
+    PSIZE_T return_length
 );
 
 } // namespace veilhook::syscalls

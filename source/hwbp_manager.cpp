@@ -1,5 +1,6 @@
 #include <veilhook/hwbp_manager.hpp>
 #include <veilhook/veh_hub.hpp>
+#include <veilhook/syscalls.hpp>
 #include <algorithm>
 
 namespace veilhook::hwbp {
@@ -23,7 +24,7 @@ int Manager::set(HANDLE thread, uintptr_t addr, Type type, Length length, HwbpCa
     CONTEXT ctx{};
     ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
     
-    if (!GetThreadContext(thread, &ctx)) {
+    if (syscalls::nt_get_context_thread(thread, &ctx) != syscalls::STATUS_SUCCESS) {
         return -1;
     }
 
@@ -56,7 +57,7 @@ int Manager::set(HANDLE thread, uintptr_t addr, Type type, Length length, HwbpCa
     uint64_t condition = (static_cast<uint64_t>(type) | (static_cast<uint64_t>(length) << 2));
     ctx.Dr7 |= (condition << (16 + available_slot * 4));
 
-    if (!SetThreadContext(thread, &ctx)) {
+    if (syscalls::nt_set_context_thread(thread, &ctx) != syscalls::STATUS_SUCCESS) {
         return -1;
     }
 
@@ -78,7 +79,7 @@ bool Manager::clear(HANDLE thread, int slot) {
 
     CONTEXT ctx{};
     ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
-    if (!GetThreadContext(thread, &ctx)) {
+    if (syscalls::nt_get_context_thread(thread, &ctx) != syscalls::STATUS_SUCCESS) {
         return false;
     }
 
@@ -95,7 +96,7 @@ bool Manager::clear(HANDLE thread, int slot) {
         case 3: ctx.Dr3 = 0; break;
     }
 
-    return SetThreadContext(thread, &ctx) != 0;
+    return syscalls::nt_set_context_thread(thread, &ctx) == syscalls::STATUS_SUCCESS;
 }
 
 int Manager::set_for_current_thread(uintptr_t addr, Type type, Length length, HwbpCallback callback) {

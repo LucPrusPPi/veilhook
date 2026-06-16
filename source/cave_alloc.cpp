@@ -1,6 +1,9 @@
 #include <veilhook/cave_alloc.hpp>
+#include <veilhook/syscalls.hpp>
+#include <veilhook/xorstr.hpp>
 #include <tlhelp32.h>
 #include <psapi.h>
+#include <cmath>
 
 namespace veilhook::mem {
 
@@ -39,8 +42,11 @@ uint8_t* CaveAlloc::find_cave_in_module(HMODULE mod, size_t size) {
                         uint8_t* cave = sec_base + j - count + 1;
                         
                         // Temporarily make writable
-                        DWORD old_protect;
-                        if (VirtualProtect(cave, size, PAGE_EXECUTE_READWRITE, &old_protect)) {
+                        ULONG old_protect = 0;
+                        PVOID base_addr = reinterpret_cast<PVOID>(cave);
+                        SIZE_T region_size = size;
+
+                        if (syscalls::nt_protect_virtual_memory(GetCurrentProcess(), &base_addr, &region_size, PAGE_EXECUTE_READWRITE, &old_protect) == syscalls::STATUS_SUCCESS) {
                             return cave;
                         }
                     }
@@ -69,14 +75,16 @@ uint8_t* CaveAlloc::allocate_page_near(uintptr_t target, size_t size) {
 
     while (current_addr > min_addr) {
         MEMORY_BASIC_INFORMATION mbi;
-        if (!VirtualQuery(reinterpret_cast<LPCVOID>(current_addr), &mbi, sizeof(mbi))) {
+        SIZE_T ret_len;
+        if (syscalls::nt_query_virtual_memory(GetCurrentProcess(), reinterpret_cast<PVOID>(current_addr), syscalls::MemoryBasicInformation, &mbi, sizeof(mbi), &ret_len) != syscalls::STATUS_SUCCESS) {
             break;
         }
 
         if (mbi.State == MEM_FREE) {
-            uint8_t* ptr = static_cast<uint8_t*>(VirtualAlloc(reinterpret_cast<LPVOID>(current_addr), size, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE));
-            if (ptr) {
-                return ptr;
+            PVOID ptr = reinterpret_cast<PVOID>(current_addr);
+            SIZE_T region_size = size;
+            if (syscalls::nt_allocate_virtual_memory(GetCurrentProcess(), &ptr, 0, &region_size, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE) == syscalls::STATUS_SUCCESS) {
+                return static_cast<uint8_t*>(ptr);
             }
         }
 
@@ -85,7 +93,12 @@ uint8_t* CaveAlloc::allocate_page_near(uintptr_t target, size_t size) {
     }
 
     // Fallback: far allocation anywhere
-    return static_cast<uint8_t*>(VirtualAlloc(nullptr, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+    PVOID far_ptr = nullptr;
+    SIZE_T region_size = size;
+    if (syscalls::nt_allocate_virtual_memory(GetCurrentProcess(), &far_ptr, 0, &region_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE) == syscalls::STATUS_SUCCESS) {
+        return static_cast<uint8_t*>(far_ptr);
+    }
+    return nullptr;
 }
 
 uint8_t* CaveAlloc::allocate(uintptr_t target, size_t size) {
@@ -130,13 +143,20 @@ void CaveAlloc::deallocate(uint8_t* ptr, size_t size) {
     if (it != allocations_.end()) {
         if (it->is_cave) {
             // Restore original memory protection if needed, zero out
-            DWORD old_protect;
-            if (VirtualProtect(ptr, size, PAGE_EXECUTE_READWRITE, &old_protect)) {
+            ULONG old_protect = 0;
+            PVOID base_addr = reinterpret_cast<PVOID>(ptr);
+            SIZE_T region_size = size;
+
+            if (syscalls::nt_protect_virtual_memory(GetCurrentProcess(), &base_addr, &region_size, PAGE_EXECUTE_READWRITE, &old_protect) == syscalls::STATUS_SUCCESS) {
                 memset(ptr, 0x00, size);
-                VirtualProtect(ptr, size, old_protect, &old_protect);
+                base_addr = reinterpret_cast<PVOID>(ptr);
+                region_size = size;
+                syscalls::nt_protect_virtual_memory(GetCurrentProcess(), &base_addr, &region_size, old_protect, &old_protect);
             }
         } else {
-            VirtualFree(ptr, 0, MEM_RELEASE);
+            PVOID base_addr = reinterpret_cast<PVOID>(ptr);
+            SIZE_T region_size = 0;
+            syscalls::nt_free_virtual_memory(GetCurrentProcess(), &base_addr, &region_size, MEM_RELEASE);
         }
         allocations_.erase(it);
     }

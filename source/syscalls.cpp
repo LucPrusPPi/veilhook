@@ -269,4 +269,17 @@ NTSTATUS nt_resume_thread(
     return stub(thread_handle, previous_suspend_count);
 }
 
+NTSTATUS nt_query_virtual_memory(
+    HANDLE process_handle,
+    PVOID base_address,
+    MEMORY_INFORMATION_CLASS memory_information_class,
+    PVOID memory_information,
+    SIZE_T memory_information_length,
+    PSIZE_T return_length)
+{
+    using Fn = NtQueryVirtualMemoryFn;
+    auto stub = reinterpret_cast<Fn>(get_syscall_stub(_XOR("NtQueryVirtualMemory")));
+    return stub(process_handle, base_address, memory_information_class, memory_information, memory_information_length, return_length);
+}
+
 } // namespace veilhook::syscalls
