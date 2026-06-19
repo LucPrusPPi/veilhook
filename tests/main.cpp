@@ -138,6 +138,30 @@ void test_hwbp() {
     std::cout << "[+] HWBP test passed." << std::endl;
 }
 
+// --- Scanner Test ---
+#include <veilhook/scanner.hpp>
+
+void test_scanner() {
+    std::cout << "--- Testing Pattern Scanner ---" << std::endl;
+    // Dummy code buffer
+    uint8_t buffer[] = {
+        0x55, 0x48, 0x8B, 0xEC, 0x48, 0x83, 0xEC, 0x20,
+        0x48, 0x8B, 0x05, 0x11, 0x22, 0x33, 0x44, // mov rax, [rip+offset]
+        0x48, 0x85, 0xC0, 0x74, 0x05, 0xE8, 0xAA, 0xBB, 0xCC, 0xDD
+    };
+
+    auto pattern = VEIL_PATTERN("48 8B 05 ? ? ? ? 48 85 C0");
+    auto match = veilhook::scanner::scan(std::span<const uint8_t>(buffer, sizeof(buffer)), pattern);
+    
+    assert(match.has_value());
+    assert(match.value() == &buffer[8]);
+    
+    auto resolved = veilhook::scanner::resolve_rip(match.value(), 3, 7);
+    assert(resolved.has_value());
+    std::cout << "[+] Scanner found correct match at index: " << (match.value() - buffer) << std::endl;
+    std::cout << "[+] Scanner test passed." << std::endl;
+}
+
 int main() {
     try {
         if (!veilhook::syscalls::init()) {
@@ -149,6 +173,7 @@ int main() {
         test_inline_hook();
         test_mid_hook();
         test_hwbp();
+        test_scanner();
         
         std::cout << "\n[=== ALL TESTS PASSED ===]" << std::endl;
     } catch (const std::exception& e) {

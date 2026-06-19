@@ -1,5 +1,6 @@
 #include <veilhook/hook/vmt.hpp>
 #include <veilhook/cave_alloc.hpp>
+#include <veilhook/syscalls.hpp>
 #include <windows.h>
 #include <stdexcept>
 
@@ -48,7 +49,8 @@ size_t Vmt::count_vtable_methods(uintptr_t* vtable) {
     
     while (true) {
         // Very basic validation that the pointer points to executable memory
-        if (!VirtualQuery(reinterpret_cast<LPCVOID>(vtable[count]), &mbi, sizeof(mbi))) {
+        SIZE_T ret_len;
+        if (syscalls::nt_query_virtual_memory(GetCurrentProcess(), reinterpret_cast<PVOID>(vtable[count]), syscalls::MemoryBasicInformation, &mbi, sizeof(mbi), &ret_len) != syscalls::STATUS_SUCCESS) {
             break;
         }
         
