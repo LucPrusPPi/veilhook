@@ -162,6 +162,53 @@ void test_scanner() {
     std::cout << "[+] Scanner test passed." << std::endl;
 }
 
+// --- Guard Hook Test ---
+#include <veilhook/hook/guard.hpp>
+#include <veilhook/analyzer/prologue.hpp>
+#include <veilhook/analyzer/detector.hpp>
+
+bool guard_hit = false;
+void guard_callback(veilhook::hook::GuardContext& ctx) {
+    std::cout << "[+] Guard Hook Executed! RIP: " << std::hex << ctx.Rip << std::dec << std::endl;
+    guard_hit = true;
+}
+
+void test_guard_hook() {
+    std::cout << "--- Testing Guard Hook ---" << std::endl;
+    veilhook::hook::Guard guard_hook(reinterpret_cast<uintptr_t>(&target_function), guard_callback);
+    
+    assert(guard_hook.install());
+    
+    int val = target_function(5, 5); // Should trigger EXCEPTION_GUARD_PAGE
+    assert(guard_hit);
+    assert(val == 10);
+    
+    assert(guard_hook.uninstall());
+    std::cout << "[+] Guard Hook test passed." << std::endl;
+}
+
+void test_analyzer() {
+    std::cout << "--- Testing Analyzer & Detector ---" << std::endl;
+    
+    // We already have an inline hook written in this test suite. Let's use it!
+    g_inline_hook = std::make_unique<veilhook::hook::Inline>(
+        reinterpret_cast<uintptr_t>(&target_function),
+        reinterpret_cast<uintptr_t>(&hk_target_function)
+    );
+    g_inline_hook->install();
+
+    auto detection = veilhook::analyzer::Detector::check_memory(reinterpret_cast<uintptr_t>(&target_function));
+    assert(detection.is_hooked);
+    assert(detection.type == veilhook::analyzer::HookType::InlineNearJmp);
+    
+    uintptr_t resolved = veilhook::analyzer::Prologue::resolve_jmp_chain(reinterpret_cast<uintptr_t>(&target_function));
+    assert(resolved == reinterpret_cast<uintptr_t>(&hk_target_function));
+
+    g_inline_hook->uninstall();
+
+    std::cout << "[+] Analyzer & Detector test passed." << std::endl;
+}
+
 int main() {
     try {
         if (!veilhook::syscalls::init()) {
@@ -174,6 +221,8 @@ int main() {
         test_mid_hook();
         test_hwbp();
         test_scanner();
+        test_guard_hook();
+        test_analyzer();
         
         std::cout << "\n[=== ALL TESTS PASSED ===]" << std::endl;
     } catch (const std::exception& e) {

@@ -5,3 +5,6 @@ D:\FastFarmer\veilhook\source\hook_inline.cpp;D:\FastFarmer\veilhook\build\veilh
 D:\FastFarmer\veilhook\source\hook_mid.cpp;D:\FastFarmer\veilhook\build\veilhook.dir\Release\hook_mid.obj
 D:\FastFarmer\veilhook\source\hook_vmt.cpp;D:\FastFarmer\veilhook\build\veilhook.dir\Release\hook_vmt.obj
 D:\FastFarmer\veilhook\source\syscalls.cpp;D:\FastFarmer\veilhook\build\veilhook.dir\Release\syscalls.obj
+D:\FastFarmer\veilhook\source\analyzer_detector.cpp;D:\FastFarmer\veilhook\build\veilhook.dir\Release\analyzer_detector.obj
+D:\FastFarmer\veilhook\source\analyzer_prologue.cpp;D:\FastFarmer\veilhook\build\veilhook.dir\Release\analyzer_prologue.obj
+D:\FastFarmer\veilhook\source\hook_guard.cpp;D:\FastFarmer\veilhook\build\veilhook.dir\Release\hook_guard.obj

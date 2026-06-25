@@ -1,0 +1,10 @@
+^D:\FASTFARMER\VEILHOOK\3RDPARTY\FADEC\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SD:/FastFarmer/veilhook -BD:/FastFarmer/veilhook/build --check-stamp-file D:/FastFarmer/veilhook/build/3rdparty/fadec/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

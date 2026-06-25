@@ -320,6 +320,9 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     <ClCompile Include="D:\FastFarmer\veilhook\source\hook_mid.cpp" />
     <ClCompile Include="D:\FastFarmer\veilhook\source\hook_vmt.cpp" />
     <ClCompile Include="D:\FastFarmer\veilhook\source\syscalls.cpp" />
+    <ClCompile Include="D:\FastFarmer\veilhook\source\analyzer_detector.cpp" />
+    <ClCompile Include="D:\FastFarmer\veilhook\source\analyzer_prologue.cpp" />
+    <ClCompile Include="D:\FastFarmer\veilhook\source\hook_guard.cpp" />
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>
