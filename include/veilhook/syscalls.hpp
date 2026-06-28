@@ -74,6 +74,34 @@ using NtQueryVirtualMemoryFn = NTSTATUS(NTAPI*)(
     PSIZE_T ReturnLength
 );
 
+using NtCreateSectionFn = NTSTATUS(NTAPI*)(
+    PHANDLE SectionHandle,
+    ACCESS_MASK DesiredAccess,
+    POBJECT_ATTRIBUTES ObjectAttributes,
+    PLARGE_INTEGER MaximumSize,
+    ULONG SectionPageProtection,
+    ULONG AllocationAttributes,
+    HANDLE FileHandle
+);
+
+using NtMapViewOfSectionFn = NTSTATUS(NTAPI*)(
+    HANDLE SectionHandle,
+    HANDLE ProcessHandle,
+    PVOID *BaseAddress,
+    ULONG_PTR ZeroBits,
+    SIZE_T CommitSize,
+    PLARGE_INTEGER SectionOffset,
+    PSIZE_T ViewSize,
+    DWORD InheritDisposition, // Actually SECTION_INHERIT
+    ULONG AllocationType,
+    ULONG Win32Protect
+);
+
+using NtUnmapViewOfSectionFn = NTSTATUS(NTAPI*)(
+    HANDLE ProcessHandle,
+    PVOID BaseAddress
+);
+
 // Our stealth wrapper functions:
 
 NTSTATUS nt_allocate_virtual_memory(
@@ -127,6 +155,34 @@ NTSTATUS nt_query_virtual_memory(
     PVOID memory_information,
     SIZE_T memory_information_length,
     PSIZE_T return_length
+);
+
+NTSTATUS nt_create_section(
+    PHANDLE section_handle,
+    ACCESS_MASK desired_access,
+    POBJECT_ATTRIBUTES object_attributes,
+    PLARGE_INTEGER maximum_size,
+    ULONG section_page_protection,
+    ULONG allocation_attributes,
+    HANDLE file_handle
+);
+
+NTSTATUS nt_map_view_of_section(
+    HANDLE section_handle,
+    HANDLE process_handle,
+    PVOID* base_address,
+    ULONG_PTR zero_bits,
+    SIZE_T commit_size,
+    PLARGE_INTEGER section_offset,
+    PSIZE_T view_size,
+    DWORD inherit_disposition,
+    ULONG allocation_type,
+    ULONG win32_protect
+);
+
+NTSTATUS nt_unmap_view_of_section(
+    HANDLE process_handle,
+    PVOID base_address
 );
 
 } // namespace veilhook::syscalls

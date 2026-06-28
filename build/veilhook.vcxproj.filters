@@ -31,6 +31,9 @@
     <ClCompile Include="D:\FastFarmer\veilhook\source\hook_guard.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="D:\FastFarmer\veilhook\source\hook_phantom.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="D:\FastFarmer\veilhook\CMakeLists.txt" />

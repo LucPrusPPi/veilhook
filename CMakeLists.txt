@@ -28,6 +28,7 @@ target_sources(veilhook PRIVATE
     source/analyzer_detector.cpp
     source/analyzer_prologue.cpp
     source/hook_guard.cpp
+    source/hook_phantom.cpp
 )
 
 # Includes

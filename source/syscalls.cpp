@@ -281,5 +281,43 @@ NTSTATUS nt_query_virtual_memory(
     auto stub = reinterpret_cast<Fn>(get_syscall_stub(_XOR("NtQueryVirtualMemory")));
     return stub(process_handle, base_address, memory_information_class, memory_information, memory_information_length, return_length);
 }
+NTSTATUS nt_create_section(
+    PHANDLE section_handle,
+    ACCESS_MASK desired_access,
+    POBJECT_ATTRIBUTES object_attributes,
+    PLARGE_INTEGER maximum_size,
+    ULONG section_page_protection,
+    ULONG allocation_attributes,
+    HANDLE file_handle)
+{
+    using Fn = NtCreateSectionFn;
+    auto stub = reinterpret_cast<Fn>(get_syscall_stub(_XOR("NtCreateSection")));
+    return stub(section_handle, desired_access, object_attributes, maximum_size, section_page_protection, allocation_attributes, file_handle);
+}
 
+NTSTATUS nt_map_view_of_section(
+    HANDLE section_handle,
+    HANDLE process_handle,
+    PVOID* base_address,
+    ULONG_PTR zero_bits,
+    SIZE_T commit_size,
+    PLARGE_INTEGER section_offset,
+    PSIZE_T view_size,
+    DWORD inherit_disposition,
+    ULONG allocation_type,
+    ULONG win32_protect)
+{
+    using Fn = NtMapViewOfSectionFn;
+    auto stub = reinterpret_cast<Fn>(get_syscall_stub(_XOR("NtMapViewOfSection")));
+    return stub(section_handle, process_handle, base_address, zero_bits, commit_size, section_offset, view_size, inherit_disposition, allocation_type, win32_protect);
+}
+
+NTSTATUS nt_unmap_view_of_section(
+    HANDLE process_handle,
+    PVOID base_address)
+{
+    using Fn = NtUnmapViewOfSectionFn;
+    auto stub = reinterpret_cast<Fn>(get_syscall_stub(_XOR("NtUnmapViewOfSection")));
+    return stub(process_handle, base_address);
+}
 } // namespace veilhook::syscalls

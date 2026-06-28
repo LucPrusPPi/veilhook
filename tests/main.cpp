@@ -209,6 +209,40 @@ void test_analyzer() {
     std::cout << "[+] Analyzer & Detector test passed." << std::endl;
 }
 
+// --- Phantom Hook Test ---
+#include <veilhook/hook/phantom.hpp>
+
+int hk_target_function_phantom(int a, int b) {
+    std::cout << "[+] Phantom Hook Executed! Args: " << a << ", " << b << std::endl;
+    // We cannot easily call the original here unless we use the get_original trampoline
+    // BUT we need an instance of Phantom to do that. For this test, we just return a constant.
+    return 999;
+}
+
+void test_phantom_hook() {
+    std::cout << "--- Testing Phantom Hook ---" << std::endl;
+    assert(target_function(2, 3) == 5);
+
+    veilhook::hook::Phantom phantom_hook(
+        reinterpret_cast<uintptr_t>(&target_function),
+        reinterpret_cast<uintptr_t>(&hk_target_function_phantom)
+    );
+
+    bool installed = phantom_hook.install();
+    if (!installed) {
+        std::cout << "[-] Phantom Hook failed to install (possibly across page boundary)." << std::endl;
+        return;
+    }
+
+    int val = target_function(2, 3);
+    std::cout << "Hooked func returned: " << val << std::endl;
+    assert(val == 999);
+
+    phantom_hook.uninstall();
+    assert(target_function(2, 3) == 5);
+    std::cout << "[+] Phantom Hook test passed." << std::endl;
+}
+
 int main() {
     try {
         if (!veilhook::syscalls::init()) {
@@ -222,6 +256,7 @@ int main() {
         test_hwbp();
         test_scanner();
         test_guard_hook();
+        test_phantom_hook();
         test_analyzer();
         
         std::cout << "\n[=== ALL TESTS PASSED ===]" << std::endl;
