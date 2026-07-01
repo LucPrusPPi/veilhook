@@ -1,0 +1,17 @@
+---
+Language: Cpp
+BasedOnStyle: Google
+
+IndentWidth: 4
+ColumnLimit: 120
+UseTab: Never
+PointerAlignment: Left
+AllowShortIfStatementsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Empty
+AccessModifierOffset: -4
+SpacesBeforeTrailingComments: 1
+NamespaceIndentation: None
+
+Standard: c++20
+SortIncludes: true
+

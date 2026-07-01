@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# /W4 on our target only; third_party stays quiet
+
 # Add fadec submodule
 add_subdirectory(3rdparty/fadec)
 
@@ -43,6 +45,11 @@ target_link_libraries(veilhook
     PUBLIC Zydis::Zydis
     PRIVATE asmjit::asmjit
 )
+
+# Apply strict warnings only to our code
+if(MSVC)
+    target_compile_options(veilhook PRIVATE /W4 /WX)
+endif()
 
 # Tests executable
 add_executable(veilhook_tests tests/main.cpp)

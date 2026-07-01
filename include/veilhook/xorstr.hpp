@@ -36,7 +36,7 @@ struct MetaString {
     
     constexpr MetaString(const char* str, unsigned int key) : buffer{}, key(key) {
         for (int i = 0; i < N; i++) {
-            buffer[i] = str[i] ^ (key + i);
+            buffer[i] = static_cast<char>(str[i] ^ (key + i));
         }
     }
 };
@@ -53,7 +53,7 @@ public:
     std::string decrypt() const {
         std::string result(N - 1, '\0');
         for (int i = 0; i < N - 1; i++) {
-            result[i] = buffer[i] ^ (key + i);
+            result[i] = static_cast<char>(buffer[i] ^ (key + i));
         }
         return result;
     }
