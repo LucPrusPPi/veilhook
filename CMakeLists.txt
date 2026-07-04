@@ -14,6 +14,7 @@ add_subdirectory(3rdparty/fadec)
 # Zydis and asmjit from vcpkg
 find_package(zydis CONFIG REQUIRED)
 find_package(asmjit CONFIG REQUIRED)
+find_package(GTest CONFIG REQUIRED)
 
 # The static library
 add_library(veilhook STATIC)
@@ -52,8 +53,8 @@ if(MSVC)
 endif()
 
 # Tests executable
-add_executable(veilhook_tests tests/main.cpp)
-target_link_libraries(veilhook_tests PRIVATE veilhook)
+add_executable(veilhook_tests tests/test_main.cpp tests/test_hooks.cpp tests/test_detector.cpp)
+target_link_libraries(veilhook_tests PRIVATE veilhook GTest::gtest GTest::gtest_main)
 
 # If you use NTAPI, you might need ntdll
 target_link_libraries(veilhook_tests PRIVATE ntdll)

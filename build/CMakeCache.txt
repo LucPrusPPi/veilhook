@@ -224,6 +224,9 @@ FADEC_ENCODE2:BOOL=OFF
 //Include undocumented instructions
 FADEC_UNDOC:BOOL=OFF
 
+//The directory containing a CMake configuration file for GTest.
+GTest_DIR:PATH=D:/FastFarmer/veilhook/build/vcpkg_installed/x64-windows/share/gtest
+
 //Automatically copy dependencies into the output directory for
 // executables.
 VCPKG_APPLOCAL_DEPS:BOOL=ON

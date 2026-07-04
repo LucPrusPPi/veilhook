@@ -25661,3 +25661,130 @@ events:
         - "C:/Program Files (x86)/veilhook"
       CMAKE_FIND_ROOT_PATH: "D:/FastFarmer/veilhook/build/vcpkg_installed/x64-windows/debug;D:/FastFarmer/veilhook/build/vcpkg_installed/x64-windows"
 ...
+
+---
+events:
+  -
+    kind: "find_package-v1"
+    backtrace:
+      - "C:/Users/Letalty/AppData/Local/vcpkg/scripts/buildsystems/vcpkg.cmake:939 (_find_package)"
+      - "CMakeLists.txt:18 (find_package)"
+    name: "GTest"
+    configs:
+      -
+        filename: "GTestConfig.cmake"
+        kind: "cmake"
+      -
+        filename: "gtest-config.cmake"
+        kind: "cmake"
+    version_request:
+      exact: false
+    settings:
+      required: "required_explicit"
+      quiet: false
+      global: false
+      policy_scope: true
+      bypass_provider: false
+      names:
+        - "GTest"
+      path_suffixes:
+        - ""
+      paths:
+        CMAKE_FIND_USE_CMAKE_PATH: true
+        CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+        CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+        CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+        CMAKE_FIND_USE_INSTALL_PREFIX: true
+        CMAKE_FIND_USE_PACKAGE_ROOT_PATH: true
+        CMAKE_FIND_USE_CMAKE_PACKAGE_REGISTRY: true
+        CMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY: true
+        CMAKE_FIND_ROOT_PATH_MODE: "BOTH"
+    candidates:
+      -
+        path: "D:/FastFarmer/veilhook/build/vcpkg_installed/x64-windows/debug/GTestConfig.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "D:/FastFarmer/veilhook/build/vcpkg_installed/x64-windows/debug/gtest-config.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "D:/FastFarmer/veilhook/build/vcpkg_installed/x64-windows/debug/GTestConfig.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "D:/FastFarmer/veilhook/build/vcpkg_installed/x64-windows/debug/gtest-config.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "D:/FastFarmer/veilhook/build/vcpkg_installed/x64-windows/GTestConfig.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "D:/FastFarmer/veilhook/build/vcpkg_installed/x64-windows/gtest-config.cmake"
+        mode: "config"
+        reason: "no_exist"
+    found:
+      path: "D:/FastFarmer/veilhook/build/vcpkg_installed/x64-windows/share/gtest/GTestConfig.cmake"
+      mode: "config"
+      version: "1.17.0"
+    search_context:
+      CMAKE_PREFIX_PATH:
+        - "D:/FastFarmer/veilhook/build/vcpkg_installed/x64-windows/debug"
+        - "D:/FastFarmer/veilhook/build/vcpkg_installed/x64-windows"
+      ENV{PATH}:
+        - "C:/Users/Letalty/.gemini/antigravity-ide/bin"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.3\\bin\\x64"
+        - "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.3\\bin"
+        - "C:\\Program Files (x86)\\Common Files\\Oracle\\Java\\java8path"
+        - "C:\\Program Files (x86)\\Common Files\\Oracle\\Java\\javapath"
+        - "C:\\Program Files\\Eclipse Adoptium\\jdk-25.0.2.10-hotspot\\bin"
+        - "c:\\Users\\Letalty\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
+        - "C:\\Program Files (x86)\\VMware\\VMware Workstation\\bin\\"
+        - "C:\\Windows\\system32"
+        - "C:\\Windows"
+        - "C:\\Windows\\System32\\Wbem"
+        - "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\"
+        - "C:\\Windows\\System32\\OpenSSH\\"
+        - "C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\NvDLISR"
+        - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
+        - "C:\\Program Files\\nodejs\\"
+        - "C:\\Program Files\\dotnet\\"
+        - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\"
+        - "C:\\Program Files\\Microsoft SQL Server\\170\\Tools\\Binn\\"
+        - "C:\\Program Files\\Microsoft SQL Server\\Client SDK\\ODBC\\170\\Tools\\Binn\\"
+        - "C:\\Program Files\\Microsoft SQL Server\\150\\Tools\\Binn\\"
+        - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Users\\Letalty\\AppData\\Local\\Programs\\Python\\Python311\\Scripts\\"
+        - "C:\\Users\\Letalty\\AppData\\Local\\Programs\\Python\\Python311\\"
+        - "C:\\Users\\Letalty\\AppData\\Local\\Microsoft\\WindowsApps"
+        - "C:\\Users\\Letalty\\AppData\\R"
+        - "C:\\Program Files\\Go\\bin"
+        - "C:\\Program Files\\NVIDIA Corporation\\Nsight Compute 2026.2.0\\"
+        - "C:\\Program Files\\Docker\\Docker\\resources\\bin"
+        - "C:\\Program Files\\Git\\cmd"
+        - "C:\\Users\\Letalty\\AppData\\Local\\hermes\\hermes-agent\\venv\\Scripts"
+        - "C:\\Users\\Letalty\\.cargo\\bin"
+        - "C:\\Users\\Letalty\\AppData\\Local\\Programs\\Python\\Python311\\Scripts\\"
+        - "C:\\Users\\Letalty\\AppData\\Local\\Programs\\Python\\Python311\\"
+        - "C:\\Users\\Letalty\\AppData\\Local\\Microsoft\\WindowsApps"
+        - "C:\\Users\\Letalty\\AppData\\Roaming\\npm"
+        - "C:\\Users\\Letalty\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
+        - "C:\\Users\\Letalty\\.dotnet\\tools"
+        - "C:\\Users\\Letalty\\AppData\\Local\\Programs\\Antigravity\\bin"
+        - "C:\\Users\\Letalty\\AppData\\Local\\Programs\\Windsurf\\bin"
+        - "C:\\Users\\Letalty\\go\\bin"
+        - "C:\\Users\\Letalty\\.lmstudio\\bin"
+        - "C:\\Users\\Letalty\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Genymobile.scrcpy_Microsoft.Winget.Source_8wekyb3d8bbwe\\scrcpy-win64-v3.3.4"
+        - "C:\\Users\\Letalty\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-8.1-full_build\\bin"
+        - "C:\\Users\\Letalty\\AppData\\Local\\Programs\\Ollama"
+        - "C:\\Users\\Letalty\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
+        - "C:\\Users\\Letalty\\AppData\\Local\\Programs\\Antigravity IDE\\bin"
+      CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/veilhook"
+      CMAKE_SYSTEM_PREFIX_PATH:
+        - "C:/Program Files"
+        - "C:/Program Files (x86)"
+        - "C:/Program Files/CMake"
+        - "C:/Program Files (x86)/veilhook"
+      CMAKE_FIND_ROOT_PATH: "D:/FastFarmer/veilhook/build/vcpkg_installed/x64-windows/debug;D:/FastFarmer/veilhook/build/vcpkg_installed/x64-windows"
+...

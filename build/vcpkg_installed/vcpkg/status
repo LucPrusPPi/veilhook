@@ -40,3 +40,13 @@ Abi: e1e3a870f3b6d2433e02ab09f070d5bd93bec9ad795768dfd3be32ece3046910
 Description: AsmJit is a lightweight library for machine code generation written in C++ language
 Status: install ok installed
 
+Package: gtest
+Version: 1.17.0
+Port-Version: 2
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 40f2f35dbaedeb6f35e9dcd9cb0fe08876d342dc50181b9d43e6781f33a5f422
+Description: Google Testing and Mocking Framework
+Status: install ok installed
+
