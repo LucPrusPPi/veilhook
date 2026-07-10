@@ -3,13 +3,15 @@
 #include <veilhook/hook/phantom.hpp>
 
 // --- Helper Functions ---
-int target_function_math(int a, int b) {
+#pragma optimize("", off)
+__declspec(noinline) int target_function_math(int a, int b) {
     return a + b;
 }
 
-int target_function_math_hooked(int a, int b) {
+__declspec(noinline) int target_function_math_hooked(int a, int b) {
     return (a + b) * 10;
 }
+#pragma optimize("", on)
 
 class TargetObj {
 public:

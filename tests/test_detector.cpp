@@ -5,13 +5,15 @@
 #include <veilhook/hook/phantom.hpp>
 
 // A dummy function to hook for detection
-int detector_dummy() {
+#pragma optimize("", off)
+__declspec(noinline) int detector_dummy() {
     return 1;
 }
 
-int detector_dummy_hook() {
+__declspec(noinline) int detector_dummy_hook() {
     return 2;
 }
+#pragma optimize("", on)
 
 // --- Self-Detection Tests ---
 
