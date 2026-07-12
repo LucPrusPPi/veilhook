@@ -6,6 +6,8 @@
 #include <mutex>
 #include <vector>
 
+#include <veilhook/obfuscation.hpp>
+
 namespace veilhook::hook {
 
 class Inline {
@@ -23,11 +25,14 @@ public:
 
 private:
     uintptr_t target_;
+    VEIL_STRUCT_PADDING_1
     uintptr_t destination_;
+    VEIL_STRUCT_PADDING_2
     uint8_t* original_callable_ = nullptr;
     
     // Memory tracking
     uint8_t* trampoline_ = nullptr;
+    VEIL_STRUCT_PADDING_3
     size_t trampoline_size_ = 0;
     
     // Patch window tracking

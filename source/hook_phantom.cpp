@@ -61,10 +61,19 @@ Phantom::~Phantom() {
 }
 
 bool Phantom::install() {
+    VEIL_JUNK_CODE();
     if (is_installed_) return true;
 
     decode::InstructionView decoder;
-    patch_size_ = decoder.get_boundary_length(reinterpret_cast<uint8_t*>(target_), 5);
+    
+    // Check if we need 14 bytes (far jump) or 5 bytes (near jump)
+    size_t required_jmp_size = 5;
+    int64_t rel_disp_check = static_cast<int64_t>(destination_) - static_cast<int64_t>(target_ + 5);
+    if (std::abs(rel_disp_check) > 0x7FFFFFFF) {
+        required_jmp_size = 14;
+    }
+
+    patch_size_ = decoder.get_boundary_length(reinterpret_cast<uint8_t*>(target_), required_jmp_size);
     if (patch_size_ == 0) return false;
 
     original_bytes_.resize(patch_size_);
@@ -117,7 +126,8 @@ bool Phantom::install() {
     LARGE_INTEGER max_size;
     max_size.QuadPart = page_size;
     
-    if (syscalls::nt_create_section(&h_section_, SECTION_ALL_ACCESS, nullptr, &max_size, PAGE_EXECUTE_READWRITE, SEC_COMMIT, nullptr) != syscalls::STATUS_SUCCESS) {
+    NTSTATUS status = syscalls::nt_create_section(&h_section_, SECTION_ALL_ACCESS, nullptr, &max_size, PAGE_EXECUTE_READWRITE, SEC_COMMIT, nullptr);
+    if (status != syscalls::STATUS_SUCCESS) {
         mem::CaveAlloc::get().deallocate(trampoline_, trampoline_size_);
         return false;
     }
@@ -126,7 +136,8 @@ bool Phantom::install() {
     PVOID temp_view = nullptr;
     SIZE_T view_size = page_size;
     
-    if (syscalls::nt_map_view_of_section(h_section_, GetCurrentProcess(), &temp_view, 0, page_size, nullptr, &view_size, ViewUnmap, 0, PAGE_EXECUTE_READWRITE) != syscalls::STATUS_SUCCESS) {
+    status = syscalls::nt_map_view_of_section(h_section_, GetCurrentProcess(), &temp_view, 0, page_size, nullptr, &view_size, ViewUnmap, 0, PAGE_EXECUTE_READWRITE);
+    if (status != syscalls::STATUS_SUCCESS) {
         CloseHandle(h_section_);
         mem::CaveAlloc::get().deallocate(trampoline_, trampoline_size_);
         return false;
@@ -211,6 +222,7 @@ bool Phantom::install() {
 }
 
 bool Phantom::uninstall() {
+    VEIL_JUNK_CODE();
     if (!is_installed_) return true;
 
     // We cannot easily re-map the original DLL view because we don't know the exact 

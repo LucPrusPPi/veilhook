@@ -1,6 +1,20 @@
 cmake_minimum_required(VERSION 3.25)
 project(veilhook VERSION 0.1.0 LANGUAGES CXX)
 
+# Generate random seeds for ODR-safe struct padding randomization
+string(TIMESTAMP CURRENT_SEC "%S")
+string(TIMESTAMP CURRENT_MIN "%M")
+string(TIMESTAMP CURRENT_HOUR "%H")
+
+math(EXPR SEED_1 "(${CURRENT_SEC} * 17 + 5) % 15 + 1")
+math(EXPR SEED_2 "(${CURRENT_MIN} * 31 + 12) % 15 + 1")
+math(EXPR SEED_3 "(${CURRENT_HOUR} * 13 + 7) % 15 + 1")
+
+configure_file(
+    include/veilhook/mutation_seed.hpp.in
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/veilhook/mutation_seed.hpp
+)
+
 # We require C++23
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

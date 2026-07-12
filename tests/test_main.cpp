@@ -2,6 +2,7 @@
 #include <veilhook/syscalls.hpp>
 
 int main(int argc, char **argv) {
+    std::cout << std::unitbuf; // Make stdout unbuffered for immediate crash diagnosis
     ::testing::InitGoogleTest(&argc, argv);
     
     // Initialize our syscalls framework before any tests run

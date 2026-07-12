@@ -6,6 +6,7 @@
 #include <cwctype>
 #include <unordered_map>
 #include <stdexcept>
+#include <iostream>
 
 namespace veilhook::syscalls {
 
@@ -152,7 +153,7 @@ struct SyscallStub {
 std::unordered_map<std::string, SyscallStub> g_syscall_stubs;
 asmjit::JitRuntime g_jit_runtime;
 
-SyscallStub create_syscall_stub(std::string_view name) {
+    SyscallStub create_syscall_stub(std::string_view name) {
     std::uintptr_t target_fn = get_symbol_address_peb(g_ntdll_base, name);
     if (!target_fn) throw std::runtime_error("Failed to find NT function");
 
@@ -161,6 +162,9 @@ SyscallStub create_syscall_stub(std::string_view name) {
 
     std::uintptr_t syscall_gadget = find_syscall_return_address(target_fn);
     if (!syscall_gadget) throw std::runtime_error("Failed to find syscall gadget");
+
+    std::cout << "[Syscalls DEBUG] " << name << " | Target: " << std::hex << target_fn 
+              << " | SSN: " << ssn << " | Gadget: " << syscall_gadget << std::dec << std::endl;
 
     asmjit::CodeHolder code;
     code.init(g_jit_runtime.environment());

@@ -82,6 +82,7 @@ Inline::~Inline() {
 }
 
 bool Inline::install() {
+    VEIL_JUNK_CODE();
     if (is_installed_) return true;
 
     decode::InstructionView decoder;
@@ -212,6 +213,7 @@ bool Inline::install() {
 }
 
 bool Inline::uninstall() {
+    VEIL_JUNK_CODE();
     if (!is_installed_) return true;
 
     // Passing `trampoline_` doesn't make sense for uninstalls, we are restoring bytes.
