@@ -1,77 +1,15 @@
 #include <veilhook/hook/inline.hpp>
 #include <veilhook/cave_alloc.hpp>
 #include <veilhook/decode.hpp>
-#include <veilhook/syscalls.hpp>
+#include <veilhook/thread_patch.hpp>
 #include <veilhook/xorstr.hpp>
 #include <asmjit/asmjit.h>
 #include <Zydis/Zydis.h>
 #include <Zydis/Utils.h>
-#include <tlhelp32.h>
 #include <stdexcept>
 #include <cstring>
 
 namespace veilhook::hook {
-
-// suspend everyone else, fix RIP if they sit inside the patch window
-static bool suspend_threads_and_patch(uintptr_t target, size_t patch_size, const std::vector<uint8_t>& patch_bytes, uint8_t* trampoline) {
-    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-    if (snapshot == INVALID_HANDLE_VALUE) return false;
-
-    DWORD current_process_id = GetCurrentProcessId();
-    DWORD current_thread_id = GetCurrentThreadId();
-    std::vector<HANDLE> suspended_threads;
-
-    THREADENTRY32 te32;
-    te32.dwSize = sizeof(te32);
-
-    if (Thread32First(snapshot, &te32)) {
-        do {
-            if (te32.th32OwnerProcessID == current_process_id && te32.th32ThreadID != current_thread_id) {
-                HANDLE hThread = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_SET_CONTEXT, FALSE, te32.th32ThreadID);
-                if (hThread) {
-                    ULONG suspend_count;
-                    syscalls::nt_suspend_thread(hThread, &suspend_count);
-                    suspended_threads.push_back(hThread);
-                }
-            }
-        } while (Thread32Next(snapshot, &te32));
-    }
-    CloseHandle(snapshot);
-
-    ULONG old_protect = 0;
-    bool success = false;
-    PVOID base_addr = reinterpret_cast<PVOID>(target);
-    SIZE_T region_size = patch_bytes.size();
-
-    if (syscalls::nt_protect_virtual_memory(GetCurrentProcess(), &base_addr, &region_size, PAGE_EXECUTE_READWRITE, &old_protect) == syscalls::STATUS_SUCCESS) {
-        for (HANDLE hThread : suspended_threads) {
-            CONTEXT ctx{};
-            ctx.ContextFlags = CONTEXT_CONTROL;
-            if (syscalls::nt_get_context_thread(hThread, &ctx) == syscalls::STATUS_SUCCESS) {
-                if (ctx.Rip >= target && ctx.Rip < target + patch_size) {
-                    size_t offset = ctx.Rip - target;
-                    ctx.Rip = reinterpret_cast<uintptr_t>(trampoline) + offset;
-                    syscalls::nt_set_context_thread(hThread, &ctx);
-                }
-            }
-        }
-
-        std::memcpy(reinterpret_cast<void*>(target), patch_bytes.data(), patch_bytes.size());
-        
-        base_addr = reinterpret_cast<PVOID>(target);
-        region_size = patch_bytes.size();
-        syscalls::nt_protect_virtual_memory(GetCurrentProcess(), &base_addr, &region_size, old_protect, &old_protect);
-        success = true;
-    }
-
-    for (HANDLE hThread : suspended_threads) {
-        ULONG suspend_count;
-        syscalls::nt_resume_thread(hThread, &suspend_count);
-        CloseHandle(hThread);
-    }
-
-    return success;
-}
 
 Inline::Inline(uintptr_t target, uintptr_t destination)
     : target_(target), destination_(destination) {}
@@ -201,7 +139,7 @@ bool Inline::install() {
     }
 
     // Transactionally apply the patch and fix thread contexts
-    if (suspend_threads_and_patch(target_, patch_size_, patch, trampoline_)) {
+    if (thread_patch::suspend_others_and_patch(target_, patch_size_, patch, trampoline_)) {
         is_installed_ = true;
         return true;
     }
@@ -217,7 +155,7 @@ bool Inline::uninstall() {
 
     // Passing `trampoline_` doesn't make sense for uninstalls, we are restoring bytes.
     // Our shared helper expects 4 args, for restore we pass nullptr or ignore rip migration
-    if (suspend_threads_and_patch(target_, patch_size_, original_bytes_, nullptr)) {
+    if (thread_patch::suspend_others_and_patch(target_, patch_size_, original_bytes_, nullptr)) {
         is_installed_ = false;
         mem::CaveAlloc::get().deallocate(trampoline_, trampoline_size_);
         trampoline_ = nullptr;

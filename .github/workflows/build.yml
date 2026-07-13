@@ -2,37 +2,40 @@ name: build
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [master]
   pull_request:
-    branches: [ "master" ]
-
-env:
-  BUILD_TYPE: Release
+    branches: [master]
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        submodules: recursive
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-    - name: Set up MSVC
-      uses: ilammy/msvc-dev-cmd@v1
+      - uses: ilammy/msvc-dev-cmd@v1
 
-    - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11
-      with:
-        vcpkgDirectory: ${{ github.workspace }}/vcpkg
-        vcpkgGitCommitId: 3d540f28e2392dfd660655e09f7a9355f30cb0a4
+      - name: Bootstrap vcpkg
+        shell: pwsh
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git $env:GITHUB_WORKSPACE/vcpkg
+          Set-Location $env:GITHUB_WORKSPACE/vcpkg
+          git checkout c27eeddba73f608f10605d80bc0144c1166f8fb7
+          .\bootstrap-vcpkg.bat -disableMetrics
 
-    - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_TOOLCHAIN_FILE=${{github.workspace}}/vcpkg/scripts/buildsystems/vcpkg.cmake
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        env:
+          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
 
-    - name: Build
-      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+      - name: Build
+        run: cmake --build build --config Release
 
-    - name: Test
-      working-directory: ${{github.workspace}}/build/Release
-      run: .\veilhook_tests.exe
+      - name: Test
+        working-directory: build/Release
+        run: .\veilhook_tests.exe

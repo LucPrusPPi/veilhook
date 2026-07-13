@@ -15,26 +15,24 @@ configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/include/veilhook/mutation_seed.hpp
 )
 
-# We require C++23
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# /W4 on our target only; third_party stays quiet
+# ON  = vendored fadec submodule + zydis/asmjit via vcpkg manifest (default, clone-and-build).
+# OFF = fadec::fadec (or fadec), Zydis::Zydis, asmjit::asmjit must already exist
+#       (e.g. sibling add_subdirectory in your own superbuild).
+option(VEILHOOK_BUNDLED_DEPS "Use vendored fadec and fetch zydis/asmjit via vcpkg" ON)
+option(VEILHOOK_BUILD_TESTS "Build veilhook_tests (needs GTest)" ON)
 
-# Add fadec submodule
-add_subdirectory(3rdparty/fadec)
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/VeilhookDeps.cmake)
+veilhook_setup_dependencies()
 
-# Zydis and asmjit from vcpkg
-find_package(zydis CONFIG REQUIRED)
-find_package(asmjit CONFIG REQUIRED)
-find_package(GTest CONFIG REQUIRED)
-
-# The static library
 add_library(veilhook STATIC)
 
-# Source files
 target_sources(veilhook PRIVATE
+    source/decode.cpp
+    source/thread_patch.cpp
     source/hwbp_manager.cpp
     source/veh_hub.cpp
     source/cave_alloc.cpp
@@ -48,27 +46,33 @@ target_sources(veilhook PRIVATE
     source/hook_phantom.cpp
 )
 
-# Includes
 target_include_directories(veilhook PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
 
-# Dependencies
-target_link_libraries(veilhook 
-    PUBLIC fadec
-    PUBLIC Zydis::Zydis
-    PRIVATE asmjit::asmjit
+target_link_libraries(veilhook
+    PUBLIC ${VEILHOOK_FADEC_TARGET}
+    PUBLIC ${VEILHOOK_ZYDIS_TARGET}
+    PRIVATE ${VEILHOOK_ASMJIT_TARGET}
 )
 
-# Apply strict warnings only to our code
 if(MSVC)
     target_compile_options(veilhook PRIVATE /W4 /WX)
 endif()
 
-# Tests executable
-add_executable(veilhook_tests tests/test_main.cpp tests/test_hooks.cpp tests/test_detector.cpp)
-target_link_libraries(veilhook_tests PRIVATE veilhook GTest::gtest GTest::gtest_main)
+if(VEILHOOK_BUILD_TESTS)
+    veilhook_setup_gtest()
 
-# If you use NTAPI, you might need ntdll
-target_link_libraries(veilhook_tests PRIVATE ntdll)
+    add_executable(veilhook_tests
+        tests/test_main.cpp
+        tests/test_hooks.cpp
+        tests/test_detector.cpp
+    )
+    target_link_libraries(veilhook_tests PRIVATE
+        veilhook
+        GTest::gtest
+        GTest::gtest_main
+        ntdll
+    )
+endif()

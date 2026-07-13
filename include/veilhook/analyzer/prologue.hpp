@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <optional>
 #include <vector>
-#include <fadec.h>
 
 namespace veilhook::analyzer {
 

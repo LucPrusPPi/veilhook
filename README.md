@@ -22,22 +22,50 @@ Fadec for fast length/decode; Zydis when we need proper relocation on stolen byt
 
 ## Build
 
-Needs MSVC, CMake 3.25+, vcpkg (Zydis, AsmJit, GTest). Fadec is vendored:
+Two ways to wire dependencies:
+
+### Bundled (default)
+
+Fadec submodule + Zydis/AsmJit/GTest from vcpkg manifest. Good for a standalone clone.
 
 ```bat
 git submodule update --init --recursive
-cmake --preset windows-release-vcpkg
-cmake --build cmake-build/build/windows-release-vcpkg --config Release
-ctest --test-dir cmake-build/build/windows-release-vcpkg -C Release
-```
-
-Or plain:
-
-```bat
 cmake -B build -DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake
 cmake --build build --config Release
 build\Release\veilhook_tests.exe
 ```
+
+`vcpkg.json` pulls zydis, asmjit, gtest. Fadec lives in `3rdparty/fadec`.
+
+### External deps
+
+If you already build fadec / Zydis / AsmJit next to veilhook (or in a parent CMake project), skip the submodule and vcpkg manifest:
+
+```bat
+git clone https://github.com/LucPrusPPi/veilhook
+cmake -B build -DVEILHOOK_BUNDLED_DEPS=OFF
+cmake --build build --config Release
+```
+
+Your superbuild must expose these targets **before** `add_subdirectory(veilhook)`:
+
+| Target | Role |
+|--------|------|
+| `fadec::fadec` or `fadec` | fast insn length/decode |
+| `Zydis::Zydis` | reloc stolen bytes in trampolines |
+| `asmjit::asmjit` | trampoline codegen |
+
+Example parent `CMakeLists.txt`:
+
+```cmake
+add_subdirectory(../fadec)
+find_package(zydis CONFIG REQUIRED)
+find_package(asmjit CONFIG REQUIRED)
+
+add_subdirectory(../veilhook)  # with -DVEILHOOK_BUNDLED_DEPS=OFF
+```
+
+No vcpkg toolchain needed for external mode. Use `-DVEILHOOK_BUILD_TESTS=OFF` if you do not want GTest.
 
 ## Minimal usage
 
@@ -54,7 +82,7 @@ hook.uninstall();
 
 // HWBP on current thread
 veilhook::hwbp::Manager::get().set_for_current_thread(
-    addr, veilhook::hwbp::Type::Execute, veilhook::hwbp::Length::Byte1,
+    addr, veilhook::hwbp::Type::Execute, veilhook::hwbp::Length::Len1,
     [](PEXCEPTION_POINTERS ep) { /* ... */ return; });
 ```
 

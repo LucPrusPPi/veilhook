@@ -11,6 +11,18 @@ extern "C" {
 
 namespace veilhook::decode {
 
+enum class EntryPatch {
+    None,
+    Int3,
+    NearJmp,
+    FarJmp
+};
+
+struct EntryPatchInfo {
+    EntryPatch kind = EntryPatch::None;
+    uintptr_t destination = 0;
+};
+
 struct Instruction {
     uint8_t* address;
     size_t length;
@@ -46,8 +58,15 @@ public:
         inst.is_ret = (type == FDI_RET || type == FDI_RETF);
 
         if (inst.is_branch || inst.is_call) {
-            if (FD_OP_TYPE(&fd_instr, 0) == FD_OT_OFF || FD_OP_TYPE(&fd_instr, 0) == FD_OT_IMM) {
-                 inst.absolute_target = reinterpret_cast<uintptr_t>(address) + len + FD_OP_IMM(&fd_instr, 0);
+            if (len >= 5 && (address[0] == 0xE9 || address[0] == 0xE8)) {
+                const int32_t rel = *reinterpret_cast<const int32_t*>(address + 1);
+                inst.absolute_target = reinterpret_cast<uintptr_t>(address) + 5 + rel;
+            } else if (len >= 6 && address[0] == 0xFF && address[1] == 0x25) {
+                const int32_t rel = *reinterpret_cast<const int32_t*>(address + 2);
+                const uintptr_t ptr_address = reinterpret_cast<uintptr_t>(address) + 6 + rel;
+                inst.absolute_target = *reinterpret_cast<const uintptr_t*>(ptr_address);
+            } else if (FD_OP_TYPE(&fd_instr, 0) == FD_OT_OFF || FD_OP_TYPE(&fd_instr, 0) == FD_OT_IMM) {
+                inst.absolute_target = reinterpret_cast<uintptr_t>(address) + len + FD_OP_IMM(&fd_instr, 0);
             }
         }
         
@@ -79,5 +98,9 @@ public:
 private:
     ZydisDecoder zydis_decoder_;
 };
+
+std::vector<Instruction> decode_range(InstructionView& view, uint8_t* start, size_t max_bytes);
+EntryPatchInfo detect_entry_patch(InstructionView& view, uintptr_t address);
+uintptr_t follow_jump_chain(InstructionView& view, uintptr_t start, int max_depth);
 
 } // namespace veilhook::decode
