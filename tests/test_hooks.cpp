@@ -3,7 +3,7 @@
 #include <veilhook/hook/phantom.hpp>
 #include <veilhook/syscalls.hpp>
 
-// Disable optimizations for this entire test suite to prevent ODR/inlining issues
+// keep tests from inlining away the targets we hook
 #pragma optimize("", off)
 
 // --- Helper Functions ---

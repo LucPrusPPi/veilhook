@@ -9,11 +9,10 @@
 #include <tlhelp32.h>
 #include <stdexcept>
 #include <cstring>
-#include <iostream>
 
 namespace veilhook::hook {
 
-// Private suspension logic shared between inline and mid
+// suspend everyone else, fix RIP if they sit inside the patch window
 static bool suspend_threads_and_patch(uintptr_t target, size_t patch_size, const std::vector<uint8_t>& patch_bytes, uint8_t* trampoline) {
     HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
     if (snapshot == INVALID_HANDLE_VALUE) return false;

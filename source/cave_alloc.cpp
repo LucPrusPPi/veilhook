@@ -33,7 +33,7 @@ uint8_t* CaveAlloc::find_cave_in_module(HMODULE mod, size_t size) {
             uint8_t* sec_base = base + section_header->VirtualAddress;
             size_t sec_size = section_header->Misc.VirtualSize;
 
-            // Simple linear search for 0xCC or 0x00 caves
+            // padding bytes in .text (INT3 or zeros)
             size_t count = 0;
             for (size_t j = 0; j < sec_size; j++) {
                 if (sec_base[j] == 0xCC || sec_base[j] == 0x00) {
@@ -41,7 +41,7 @@ uint8_t* CaveAlloc::find_cave_in_module(HMODULE mod, size_t size) {
                     if (count >= size) {
                         uint8_t* cave = sec_base + j - count + 1;
                         
-                        // Temporarily make writable
+                        // need RWX briefly to claim the cave
                         ULONG old_protect = 0;
                         PVOID base_addr = reinterpret_cast<PVOID>(cave);
                         SIZE_T region_size = size;
@@ -60,7 +60,7 @@ uint8_t* CaveAlloc::find_cave_in_module(HMODULE mod, size_t size) {
 }
 
 uint8_t* CaveAlloc::allocate_page_near(uintptr_t target, size_t size) {
-    // Try to allocate within 2GB for rel32
+    // scan downward from high VA, stay inside +/-2GB for rel32
     uintptr_t min_addr = (target > 0x7FFFFFFF) ? target - 0x7FFFFFFF : 0;
     uintptr_t max_addr = target + 0x7FFFFFFF;
 
@@ -92,7 +92,7 @@ uint8_t* CaveAlloc::allocate_page_near(uintptr_t target, size_t size) {
         current_addr -= sys_info.dwAllocationGranularity;
     }
 
-    // Fallback: far allocation anywhere
+    // last resort: anywhere
     PVOID far_ptr = nullptr;
     SIZE_T region_size = size;
     if (syscalls::nt_allocate_virtual_memory(GetCurrentProcess(), &far_ptr, 0, &region_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE) == syscalls::STATUS_SUCCESS) {
@@ -104,7 +104,7 @@ uint8_t* CaveAlloc::allocate_page_near(uintptr_t target, size_t size) {
 uint8_t* CaveAlloc::allocate(uintptr_t target, size_t size) {
     std::lock_guard lock(lock_);
 
-    // 1. Try to find an existing cave in loaded modules near target
+    // 1) reuse slack inside loaded modules
     HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, 0);
     if (snapshot != INVALID_HANDLE_VALUE) {
         MODULEENTRY32W me32;
@@ -112,7 +112,7 @@ uint8_t* CaveAlloc::allocate(uintptr_t target, size_t size) {
         if (Module32FirstW(snapshot, &me32)) {
             do {
                 uintptr_t mod_base = reinterpret_cast<uintptr_t>(me32.modBaseAddr);
-                // Check if within 2GB roughly
+                // rough 2GB window
                 if (std::abs(static_cast<int64_t>(mod_base) - static_cast<int64_t>(target)) < 0x7FFFFFFF) {
                     uint8_t* cave = find_cave_in_module(me32.hModule, size);
                     if (cave) {
@@ -126,7 +126,7 @@ uint8_t* CaveAlloc::allocate(uintptr_t target, size_t size) {
         CloseHandle(snapshot);
     }
 
-    // 2. Fallback to VirtualAlloc near
+    // 2) VirtualAlloc near target
     uint8_t* ptr = allocate_page_near(target, size);
     if (ptr) {
         allocations_.push_back({ptr, size, false});

@@ -1,0 +1,13 @@
+veilhook
+Copyright (c) 2026 LucPrusPPi (Sergey Tomilov / PPi Studio)
+https://github.com/LucPrusPPi/veilhook
+
+You must retain this attribution when you use or redistribute veilhook.
+
+Third-party software
+--------------------
+
+- Fadec (https://github.com/xiota/fadec) - fast x86/x64 decoder (vendored under 3rdparty/fadec)
+- Zydis (https://github.com/zyantific/zydis) - disassembler for reloc/fixup paths
+- AsmJit (https://github.com/asmjit/asmjit) - JIT stubs for mid/inline trampolines and syscall stubs
+- GoogleTest - test harness only

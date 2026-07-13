@@ -20,7 +20,7 @@ Hub& Hub::get() {
 }
 
 Hub::Hub() {
-    // 1 means call this handler first
+    // priority 1 = run before most user handlers
     veh_handle_ = AddVectoredExceptionHandler(1, exception_handler);
 }
 
@@ -36,8 +36,7 @@ std::unique_ptr<Subscription> Hub::add_handler(DWORD exception_code, int priorit
     uint64_t id = next_id_++;
     handlers_.push_back({id, exception_code, priority, std::move(filter)});
     
-    // Keep sorted by priority descending
-    std::sort(handlers_.begin(), handlers_.end());
+    std::sort(handlers_.begin(), handlers_.end()); // higher priority first
     
     return std::make_unique<SubscriptionImpl>(*this, id);
 }
@@ -55,12 +54,9 @@ LONG CALLBACK Hub::exception_handler(PEXCEPTION_POINTERS ep) {
     auto& self = get();
     DWORD code = ep->ExceptionRecord->ExceptionCode;
 
-    // Fast path filtering: only lock if we might have a handler
-    // We expect EXCEPTION_SINGLE_STEP and EXCEPTION_BREAKPOINT to be the hot paths
-    
     std::shared_lock lock(self.rw_lock_);
     for (const auto& handler : self.handlers_) {
-        if (handler.code == code || handler.code == 0) { // 0 could mean 'any'
+        if (handler.code == code || handler.code == 0) {
             if (handler.filter(ep)) {
                 return EXCEPTION_CONTINUE_EXECUTION;
             }

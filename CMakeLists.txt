@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 project(veilhook VERSION 0.1.0 LANGUAGES CXX)
 
-# Generate random seeds for ODR-safe struct padding randomization
+# Per-build junk padding sizes (see mutation_seed.hpp.in)
 string(TIMESTAMP CURRENT_SEC "%S")
 string(TIMESTAMP CURRENT_MIN "%M")
 string(TIMESTAMP CURRENT_HOUR "%H")

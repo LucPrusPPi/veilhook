@@ -14,4 +14,3 @@ NamespaceIndentation: None
 
 Standard: c++20
 SortIncludes: true
-

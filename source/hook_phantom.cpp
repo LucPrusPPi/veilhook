@@ -4,7 +4,6 @@
 #include <veilhook/syscalls.hpp>
 #include <tlhelp32.h>
 #include <cstring>
-#include <iostream>
 
 #ifndef SEC_COMMIT
 #define SEC_COMMIT 0x8000000

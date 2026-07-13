@@ -31,10 +31,9 @@ public:
         ZydisDecoderInit(&zydis_decoder_, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_STACK_WIDTH_64);
     }
 
-    // Fast path using fadec
+    // fadec: quick length + branch target
     Instruction decode_fast(uint8_t* address) {
         FdInstr fd_instr;
-        // signature: int fd_decode(const uint8_t* buf, size_t len, int mode, uintptr_t address, FdInstr* out_instr)
         int len = fd_decode(address, 15, 64, reinterpret_cast<uintptr_t>(address), &fd_instr);
         
         Instruction inst{};
@@ -47,9 +46,6 @@ public:
         inst.is_ret = (type == FDI_RET || type == FDI_RETF);
 
         if (inst.is_branch || inst.is_call) {
-            // New fadec prefers FD_OT_OFF for jumps and FD_OP_IMM handles them, 
-            // but we can check if it's an immediate/offset and calculate target.
-            // fd_instr.operands[0].type is fetched via FD_OP_TYPE(&fd_instr, 0)
             if (FD_OP_TYPE(&fd_instr, 0) == FD_OT_OFF || FD_OP_TYPE(&fd_instr, 0) == FD_OT_IMM) {
                  inst.absolute_target = reinterpret_cast<uintptr_t>(address) + len + FD_OP_IMM(&fd_instr, 0);
             }
@@ -58,14 +54,14 @@ public:
         return inst;
     }
 
-    // Advanced path using Zydis
+    // zydis: reloc stolen instructions into trampoline
     ZydisDecodedInstruction decode_advanced(uint8_t* address) {
         ZydisDecodedInstruction instruction;
         ZydisDecoderDecodeInstruction(&zydis_decoder_, nullptr, address, 15, &instruction);
         return instruction;
     }
 
-    // Get boundaries
+    // bytes needed to place a 5-byte near jmp
     size_t get_boundary_length(uint8_t* address, size_t required_length) {
         size_t total_len = 0;
         uint8_t* current = address;

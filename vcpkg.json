@@ -1,6 +1,9 @@
 {
   "name": "veilhook",
   "version-string": "0.1.0",
+  "description": "Windows x64 in-process hooking (VEH, HWBP, inline, shadow VMT)",
+  "homepage": "https://github.com/LucPrusPPi/veilhook",
+  "license": "LicenseRef-veilhook-Attribution",
   "dependencies": [
     "zydis",
     "asmjit",

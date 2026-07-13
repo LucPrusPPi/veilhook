@@ -9,8 +9,8 @@
 
 namespace veilhook::veh {
 
-// Returns true if the exception was handled (returning EXCEPTION_CONTINUE_EXECUTION)
-// Returns false to continue searching (EXCEPTION_CONTINUE_SEARCH)
+// Returns true if we handled it (CONTINUE_EXECUTION)
+// Returns false to keep searching (CONTINUE_SEARCH)
 using ExceptionFilter = std::function<bool(PEXCEPTION_POINTERS)>;
 
 class Subscription {
@@ -24,7 +24,7 @@ public:
 
     // Register a handler for a specific exception code.
     // Higher priority values execute first.
-    // HWBP and page-guard should use this to register their dispatchers.
+    // code=0 means "any exception"
     [[nodiscard]] std::unique_ptr<Subscription> add_handler(
         DWORD exception_code, 
         int priority, 

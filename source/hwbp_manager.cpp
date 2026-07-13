@@ -13,7 +13,7 @@ Manager& Manager::get() {
 Manager::Manager() {
     veh_sub_ = veh::Hub::get().add_handler(
         EXCEPTION_SINGLE_STEP, 
-        100, // High priority
+        100,
         [this](PEXCEPTION_POINTERS ep) { return handle_exception(ep); }
     );
 }
@@ -124,7 +124,7 @@ bool Manager::handle_exception(PEXCEPTION_POINTERS ep) {
     }
 
     if (triggered_slot == -1) {
-        return false; // Could be EFLAGS.TF single step
+        return false; // TF single-step, not our DRx
     }
 
     // Clear the triggered status in Dr6
@@ -150,7 +150,7 @@ bool Manager::handle_exception(PEXCEPTION_POINTERS ep) {
     if (cb) {
         cb(ep);
         // Set Resume Flag to step over the breakpoint without triggering it again immediately
-        ep->ContextRecord->EFlags |= (1 << 16); // RF flag
+        ep->ContextRecord->EFlags |= (1 << 16); // RF
         return true;
     }
 
