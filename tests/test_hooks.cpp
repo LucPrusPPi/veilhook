@@ -9,6 +9,8 @@
 #include <asmjit/asmjit.h>
 #include <cstring>
 #include <vector>
+#include <xmmintrin.h>
+#include <intrin.h>
 
 // keep tests from inlining away the targets we hook
 #pragma optimize("", off)
@@ -266,17 +268,20 @@ TEST(RelocTests, TrampolineRipRelDirect) {
     code.init(rt.environment(), reinterpret_cast<uint64_t>(tramp));
     asmjit::x86::Assembler a(&code);
 
+    veilhook::reloc::BranchSlotTable branch_slots;
     const auto reloc_status = veilhook::reloc::emit_stolen_range(
         a,
         decoder.zydis_decoder(),
         stolen.data(),
         patch_size,
         reinterpret_cast<uint64_t>(target),
-        reinterpret_cast<uint64_t>(tramp));
+        reinterpret_cast<uint64_t>(tramp),
+        nullptr,
+        &branch_slots);
     ASSERT_EQ(reloc_status, veilhook::reloc::Status::Ok);
 
-    a.mov(asmjit::x86::r11, reinterpret_cast<uint64_t>(target) + patch_size);
-    a.jmp(asmjit::x86::r11);
+    veilhook::reloc::emit_absolute_jump(a, reinterpret_cast<uint64_t>(target) + patch_size);
+    veilhook::reloc::emit_branch_slot_data(a, branch_slots);
 
     asmjit::CodeBuffer& buffer = code.sectionById(0)->buffer();
     std::memcpy(tramp, buffer.data(), buffer.size());
@@ -285,6 +290,234 @@ TEST(RelocTests, TrampolineRipRelDirect) {
     EXPECT_EQ(fn(), 42);
 
     veilhook::mem::CaveAlloc::get().deallocate(tramp, alloc_size);
+}
+
+TEST(RelocTests, TrampolineRipRelDispOverflow) {
+    g_reloc_test_value = 77;
+
+    veilhook::decode::InstructionView decoder;
+    auto* target = reinterpret_cast<uint8_t*>(&target_with_riprel);
+    const size_t patch_size = decoder.get_boundary_length(target, 5);
+    ASSERT_GT(patch_size, 0u);
+
+    std::vector<uint8_t> stolen(patch_size);
+    std::memcpy(stolen.data(), target, patch_size);
+
+    const size_t alloc_size = patch_size * 8 + 256;
+    uint8_t* tramp = veilhook::mem::CaveAlloc::get().allocate(
+        reinterpret_cast<uintptr_t>(target), alloc_size);
+    ASSERT_NE(tramp, nullptr);
+
+    asmjit::JitRuntime rt;
+    asmjit::CodeHolder code;
+    code.init(rt.environment(), reinterpret_cast<uint64_t>(tramp));
+    asmjit::x86::Assembler a(&code);
+
+    const uint64_t stolen_base = reinterpret_cast<uint64_t>(target);
+    const uint64_t far_emit_base = stolen_base + 0x100000000ULL;
+
+    veilhook::reloc::BranchSlotTable branch_slots;
+    const auto reloc_status = veilhook::reloc::emit_stolen_range(
+        a,
+        decoder.zydis_decoder(),
+        stolen.data(),
+        patch_size,
+        stolen_base,
+        far_emit_base,
+        nullptr,
+        &branch_slots);
+    ASSERT_EQ(reloc_status, veilhook::reloc::Status::Ok);
+
+    veilhook::reloc::emit_absolute_jump(a, stolen_base + patch_size);
+    veilhook::reloc::emit_branch_slot_data(a, branch_slots);
+
+    asmjit::CodeBuffer& buffer = code.sectionById(0)->buffer();
+    std::memcpy(tramp, buffer.data(), buffer.size());
+
+    const auto fn = reinterpret_cast<int(*)()>(tramp);
+    EXPECT_EQ(fn(), 77);
+
+    veilhook::mem::CaveAlloc::get().deallocate(tramp, alloc_size);
+}
+
+alignas(16) volatile float g_vec4_value[4] = {1.0f, 2.0f, 3.0f, 4.0f};
+
+__declspec(noinline) float target_with_vec_riprel() {
+    const __m128 v = _mm_load_ps(const_cast<const float*>(g_vec4_value));
+    return _mm_cvtss_f32(v);
+}
+
+static bool build_reloc_trampoline(
+    uint8_t* target,
+    size_t patch_size,
+    uint8_t* tramp,
+    size_t alloc_size,
+    uint64_t emit_runtime_base)
+{
+    veilhook::decode::InstructionView decoder;
+    std::vector<uint8_t> stolen(patch_size);
+    std::memcpy(stolen.data(), target, patch_size);
+
+    asmjit::JitRuntime rt;
+    asmjit::CodeHolder code;
+    code.init(rt.environment(), reinterpret_cast<uint64_t>(tramp));
+    asmjit::x86::Assembler a(&code);
+
+    veilhook::reloc::BranchSlotTable branch_slots;
+    const auto reloc_status = veilhook::reloc::emit_stolen_range(
+        a,
+        decoder.zydis_decoder(),
+        stolen.data(),
+        patch_size,
+        reinterpret_cast<uint64_t>(target),
+        emit_runtime_base,
+        nullptr,
+        &branch_slots);
+    if (reloc_status != veilhook::reloc::Status::Ok) {
+        return false;
+    }
+
+    veilhook::reloc::emit_absolute_jump(
+        a, reinterpret_cast<uint64_t>(target) + patch_size);
+    veilhook::reloc::emit_branch_slot_data(a, branch_slots);
+
+    asmjit::CodeBuffer& buffer = code.sectionById(0)->buffer();
+    if (buffer.size() > alloc_size) {
+        return false;
+    }
+    std::memcpy(tramp, buffer.data(), buffer.size());
+    return true;
+}
+
+TEST(RelocTests, TrampolineRipRelVector) {
+    const auto* target = reinterpret_cast<const uint8_t*>(&target_with_vec_riprel);
+    veilhook::decode::InstructionView decoder;
+    const size_t patch_size = decoder.get_boundary_length(
+        const_cast<uint8_t*>(target), 5);
+    ASSERT_GT(patch_size, 0u);
+
+    const size_t alloc_size = patch_size * 8 + 256;
+    uint8_t* tramp = veilhook::mem::CaveAlloc::get().allocate(
+        reinterpret_cast<uintptr_t>(target), alloc_size);
+    ASSERT_NE(tramp, nullptr);
+
+    const auto fn = reinterpret_cast<float(*)()>(tramp);
+    ASSERT_TRUE(build_reloc_trampoline(
+        const_cast<uint8_t*>(target),
+        patch_size,
+        tramp,
+        alloc_size,
+        reinterpret_cast<uint64_t>(tramp)));
+    EXPECT_FLOAT_EQ(fn(), 1.0f);
+
+    veilhook::mem::CaveAlloc::get().deallocate(tramp, alloc_size);
+}
+
+volatile int g_cmpxchg_cell = 7;
+
+__declspec(noinline) int target_with_cmpxchg_riprel() {
+    const int desired = 9;
+    const int expected = g_cmpxchg_cell;
+    if (_InterlockedCompareExchange(
+            reinterpret_cast<volatile long*>(&g_cmpxchg_cell),
+            desired,
+            expected) == expected) {
+        return g_cmpxchg_cell;
+    }
+    return -1;
+}
+
+TEST(RelocTests, TrampolineRipRelCmpxchg) {
+    g_cmpxchg_cell = 7;
+
+    auto* target = reinterpret_cast<uint8_t*>(&target_with_cmpxchg_riprel);
+    veilhook::decode::InstructionView decoder;
+    const size_t patch_size = decoder.get_boundary_length(target, 5);
+    ASSERT_GT(patch_size, 0u);
+
+    const size_t alloc_size = patch_size * 8 + 256;
+    uint8_t* tramp = veilhook::mem::CaveAlloc::get().allocate(
+        reinterpret_cast<uintptr_t>(target), alloc_size);
+    ASSERT_NE(tramp, nullptr);
+
+    const auto fn = reinterpret_cast<int(*)()>(tramp);
+    ASSERT_TRUE(build_reloc_trampoline(
+        target,
+        patch_size,
+        tramp,
+        alloc_size,
+        reinterpret_cast<uint64_t>(tramp)));
+    EXPECT_EQ(fn(), 9);
+    EXPECT_EQ(g_cmpxchg_cell, 9);
+
+    veilhook::mem::CaveAlloc::get().deallocate(tramp, alloc_size);
+}
+
+TEST(HookTests, PhantomHookRipRelative) {
+    HANDLE h_section = nullptr;
+    LARGE_INTEGER max_size;
+    max_size.QuadPart = 4096;
+
+    NTSTATUS status = veilhook::syscalls::nt_create_section(
+        &h_section,
+        SECTION_ALL_ACCESS,
+        nullptr,
+        &max_size,
+        PAGE_EXECUTE_READWRITE,
+        0x8000000,
+        nullptr);
+    ASSERT_EQ(status, veilhook::syscalls::STATUS_SUCCESS);
+
+    PVOID p_view = nullptr;
+    SIZE_T view_size = 4096;
+    status = veilhook::syscalls::nt_map_view_of_section(
+        h_section,
+        GetCurrentProcess(),
+        &p_view,
+        0,
+        4096,
+        nullptr,
+        &view_size,
+        2,
+        0,
+        PAGE_EXECUTE_READWRITE);
+    ASSERT_EQ(status, veilhook::syscalls::STATUS_SUCCESS);
+
+  {
+        auto* code = static_cast<uint8_t*>(p_view);
+        auto* value_slot = reinterpret_cast<int*>(code + 128);
+        *value_slot = 11;
+
+        code[0] = 0x8B;
+        code[1] = 0x05;
+        const int32_t disp = static_cast<int32_t>(
+            reinterpret_cast<uintptr_t>(value_slot) -
+            (reinterpret_cast<uintptr_t>(code) + 6));
+        std::memcpy(code + 2, &disp, sizeof(disp));
+        code[6] = 0xC3;
+    }
+
+    g_reloc_test_value = 11;
+
+    auto target_func_in_view = reinterpret_cast<int(*)()>(p_view);
+    EXPECT_EQ(target_func_in_view(), 11);
+
+    veilhook::hook::Phantom phantom_hook(
+        reinterpret_cast<uintptr_t>(p_view),
+        reinterpret_cast<uintptr_t>(&target_with_riprel_hooked));
+
+    ASSERT_TRUE(phantom_hook.install());
+    ASSERT_EQ(phantom_hook.last_status(), veilhook::hook::InstallStatus::Ok);
+
+    auto orig = phantom_hook.get_original<int(*)()>();
+    EXPECT_EQ(orig(), 11);
+    EXPECT_EQ(target_func_in_view(), 22);
+
+    EXPECT_TRUE(phantom_hook.uninstall());
+    EXPECT_EQ(target_func_in_view(), 11);
+
+    veilhook::syscalls::nt_unmap_view_of_section(GetCurrentProcess(), p_view);
+    CloseHandle(h_section);
 }
 
 TEST(ScannerTests, BasicPatternSearch) {

@@ -6,6 +6,7 @@
 
 #include <veilhook/hook/status.hpp>
 #include <veilhook/obfuscation.hpp>
+#include <veilhook/reloc.hpp>
 
 namespace veilhook::hook {
 
@@ -40,11 +41,13 @@ private:
     VEIL_STRUCT_PADDING_3
     PVOID p_view_ = nullptr;
     size_t patch_size_ = 0;
+    size_t page_size_ = 0;
 
     // We store the original memory block pointer to restore the view
     // Note: To truly restore, we'd need to re-map the original DLL view, but
     // usually we just write back the original bytes to our custom view during uninstall.
     std::vector<uint8_t> original_bytes_;
+    std::vector<reloc::InstSite> reloc_sites_;
     uint8_t* trampoline_ = nullptr;
     VEIL_STRUCT_PADDING_1
     size_t trampoline_size_ = 0;

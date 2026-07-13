@@ -1,4 +1,5 @@
 #include <veilhook/thread_patch.hpp>
+#include <veilhook/reloc.hpp>
 #include <veilhook/syscalls.hpp>
 #include <tlhelp32.h>
 #include <cstring>
@@ -10,7 +11,8 @@ bool suspend_others_and_patch(
     uintptr_t target,
     size_t patch_size,
     const std::vector<uint8_t>& patch_bytes,
-    uint8_t* trampoline)
+    uint8_t* trampoline,
+    const std::vector<reloc::InstSite>* sites)
 {
     HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
     if (snapshot == INVALID_HANDLE_VALUE) {
@@ -55,8 +57,17 @@ bool suspend_others_and_patch(
                 ctx.ContextFlags = CONTEXT_CONTROL;
                 if (syscalls::nt_get_context_thread(h, &ctx) == syscalls::STATUS_SUCCESS) {
                     if (ctx.Rip >= target && ctx.Rip < target + patch_size) {
-                        const size_t offset = ctx.Rip - target;
-                        ctx.Rip = reinterpret_cast<DWORD64>(trampoline) + offset;
+                        if (sites && !sites->empty()) {
+                            ctx.Rip = reloc::translate_runtime_ip(
+                                ctx.Rip,
+                                target,
+                                patch_size,
+                                reinterpret_cast<uint64_t>(trampoline),
+                                *sites);
+                        } else {
+                            const size_t offset = static_cast<size_t>(ctx.Rip - target);
+                            ctx.Rip = reinterpret_cast<DWORD64>(trampoline) + offset;
+                        }
                         syscalls::nt_set_context_thread(h, &ctx);
                     }
                 }

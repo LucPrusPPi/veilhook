@@ -54,13 +54,17 @@ bool Ud2::install() {
 
     original_callable_ = trampoline_;
 
+    std::vector<reloc::InstSite> reloc_sites;
+    reloc::BranchSlotTable branch_slots;
     const auto reloc_status = reloc::emit_stolen_range(
         a,
         decoder.zydis_decoder(),
         original_bytes_.data(),
         patch_size_,
         static_cast<uint64_t>(target_),
-        reinterpret_cast<uint64_t>(trampoline_));
+        reinterpret_cast<uint64_t>(trampoline_),
+        &reloc_sites,
+        &branch_slots);
 
     if (reloc_status != reloc::Status::Ok) {
         mem::CaveAlloc::get().deallocate(trampoline_, trampoline_size_);
@@ -69,8 +73,8 @@ bool Ud2::install() {
         return false;
     }
 
-    a.mov(asmjit::x86::r11, target_ + patch_size_);
-    a.jmp(asmjit::x86::r11);
+    reloc::emit_absolute_jump(a, target_ + patch_size_);
+    reloc::emit_branch_slot_data(a, branch_slots);
 
     asmjit::CodeBuffer& buffer = code.sectionById(0)->buffer();
     if (buffer.size() > trampoline_size_) {
@@ -91,7 +95,7 @@ bool Ud2::install() {
     patch[0] = 0x0F;
     patch[1] = 0x0B;
 
-    if (thread_patch::suspend_others_and_patch(target_, patch_size_, patch, trampoline_)) {
+    if (thread_patch::suspend_others_and_patch(target_, patch_size_, patch, trampoline_, &reloc_sites)) {
         is_installed_ = true;
         last_status_ = InstallStatus::Ok;
         return true;

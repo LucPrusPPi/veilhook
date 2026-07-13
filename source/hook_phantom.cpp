@@ -1,7 +1,9 @@
 #include <veilhook/hook/phantom.hpp>
 #include <veilhook/cave_alloc.hpp>
 #include <veilhook/decode.hpp>
+#include <veilhook/reloc.hpp>
 #include <veilhook/syscalls.hpp>
+#include <asmjit/asmjit.h>
 #include <tlhelp32.h>
 #include <cstring>
 
@@ -16,6 +18,26 @@ typedef enum _SECTION_INHERIT {
 } SECTION_INHERIT;
 
 namespace veilhook::hook {
+namespace {
+
+bool protect_page(PVOID page_base, SIZE_T page_size, ULONG new_protect, ULONG* old_protect) {
+    PVOID base = page_base;
+    SIZE_T region = page_size;
+    if (syscalls::nt_protect_virtual_memory(
+            GetCurrentProcess(), &base, &region, new_protect, old_protect) == syscalls::STATUS_SUCCESS) {
+        return true;
+    }
+
+    DWORD old_dw = 0;
+    if (VirtualProtect(page_base, page_size, new_protect, &old_dw)) {
+        if (old_protect) {
+            *old_protect = old_dw;
+        }
+        return true;
+    }
+
+    return false;
+}
 
 // Thread suspension helper for safe installation
 static bool suspend_all_threads(std::vector<HANDLE>& suspended_threads) {
@@ -51,6 +73,8 @@ static void resume_all_threads(const std::vector<HANDLE>& suspended_threads) {
         CloseHandle(hThread);
     }
 }
+
+} // namespace
 
 Phantom::Phantom(uintptr_t target, uintptr_t destination)
     : target_(target), destination_(destination) {}
@@ -88,6 +112,7 @@ bool Phantom::install() {
     SYSTEM_INFO sys_info;
     GetSystemInfo(&sys_info);
     size_t page_size = sys_info.dwPageSize;
+    page_size_ = page_size;
     
     uintptr_t page_base = target_ & ~(page_size - 1);
     size_t offset_in_page = target_ - page_base;
@@ -105,36 +130,66 @@ bool Phantom::install() {
     // Actually, to make it even more stealthy, we could map a custom cave. 
     // We'll use CaveAlloc.
     
-    trampoline_size_ = patch_size_ + 14; 
+    trampoline_size_ = patch_size_ * 4 + 128;
     trampoline_ = mem::CaveAlloc::get().allocate(target_, trampoline_size_);
     if (!trampoline_) {
         last_status_ = InstallStatus::NoTrampolineMemory;
         return false;
     }
-    
-    // Assemble simple trampoline: [Original Bytes] + [JMP target_ + patch_size]
-    std::memcpy(trampoline_, original_bytes_.data(), patch_size_);
-    
-    // JMP near if possible
-    int64_t rel_trampoline_back = static_cast<int64_t>(target_ + patch_size_) - static_cast<int64_t>(reinterpret_cast<uintptr_t>(trampoline_) + patch_size_ + 5);
-    if (std::abs(rel_trampoline_back) <= 0x7FFFFFFF) {
-        trampoline_[patch_size_] = 0xE9;
-        *reinterpret_cast<int32_t*>(&trampoline_[patch_size_ + 1]) = static_cast<int32_t>(rel_trampoline_back);
-    } else {
-        // FF 25 [rip+0] ...
-        trampoline_[patch_size_] = 0xFF;
-        trampoline_[patch_size_ + 1] = 0x25;
-        *reinterpret_cast<int32_t*>(&trampoline_[patch_size_ + 2]) = 0;
-        *reinterpret_cast<uint64_t*>(&trampoline_[patch_size_ + 6]) = target_ + patch_size_;
-    }
-    
+
+    asmjit::JitRuntime rt;
+    asmjit::CodeHolder code;
+    code.init(rt.environment(), reinterpret_cast<uint64_t>(trampoline_));
+    asmjit::x86::Assembler a(&code);
+
     original_callable_ = trampoline_;
+
+    std::vector<reloc::InstSite> reloc_sites;
+    reloc::BranchSlotTable branch_slots;
+    const auto reloc_status = reloc::emit_stolen_range(
+        a,
+        decoder.zydis_decoder(),
+        original_bytes_.data(),
+        patch_size_,
+        static_cast<uint64_t>(target_),
+        reinterpret_cast<uint64_t>(trampoline_),
+        &reloc_sites,
+        &branch_slots);
+
+    if (reloc_status != reloc::Status::Ok) {
+        mem::CaveAlloc::get().deallocate(trampoline_, trampoline_size_);
+        trampoline_ = nullptr;
+        last_status_ = InstallStatus::RelocFailed;
+        return false;
+    }
+
+    reloc_sites_ = std::move(reloc_sites);
+
+    reloc::emit_absolute_jump(a, target_ + patch_size_);
+    reloc::emit_branch_slot_data(a, branch_slots);
+
+    asmjit::CodeBuffer& tramp_buffer = code.sectionById(0)->buffer();
+    if (tramp_buffer.size() > trampoline_size_) {
+        mem::CaveAlloc::get().deallocate(trampoline_, trampoline_size_);
+        trampoline_ = nullptr;
+        last_status_ = InstallStatus::TrampolineOverflow;
+        return false;
+    }
+
+    std::memcpy(trampoline_, tramp_buffer.data(), tramp_buffer.size());
+    trampoline_size_ = tramp_buffer.size();
+
+    ULONG tramp_old = 0;
+    PVOID tramp_base = trampoline_;
+    SIZE_T tramp_region = trampoline_size_;
+    protect_page(tramp_base, tramp_region, PAGE_EXECUTE_READ, &tramp_old);
 
     // 3. Create a new Section backed by Pagefile (Memory mapped file)
     LARGE_INTEGER max_size;
     max_size.QuadPart = page_size;
     
-    NTSTATUS status = syscalls::nt_create_section(&h_section_, SECTION_ALL_ACCESS, nullptr, &max_size, PAGE_EXECUTE_READWRITE, SEC_COMMIT, nullptr);
+    NTSTATUS status = syscalls::nt_create_section(
+        &h_section_, SECTION_ALL_ACCESS, nullptr, &max_size, PAGE_EXECUTE_READWRITE, SEC_COMMIT, nullptr);
     if (status != syscalls::STATUS_SUCCESS) {
         mem::CaveAlloc::get().deallocate(trampoline_, trampoline_size_);
         trampoline_ = nullptr;
@@ -146,7 +201,8 @@ bool Phantom::install() {
     PVOID temp_view = nullptr;
     SIZE_T view_size = page_size;
     
-    status = syscalls::nt_map_view_of_section(h_section_, GetCurrentProcess(), &temp_view, 0, page_size, nullptr, &view_size, ViewUnmap, 0, PAGE_EXECUTE_READWRITE);
+    status = syscalls::nt_map_view_of_section(
+        h_section_, GetCurrentProcess(), &temp_view, 0, page_size, nullptr, &view_size, ViewUnmap, 0, PAGE_READWRITE);
     if (status != syscalls::STATUS_SUCCESS) {
         CloseHandle(h_section_);
         mem::CaveAlloc::get().deallocate(trampoline_, trampoline_size_);
@@ -184,6 +240,11 @@ bool Phantom::install() {
     }
     std::memcpy(temp_target, patch.data(), patch_size_);
 
+    PVOID temp_protect_base = temp_view;
+    SIZE_T temp_protect_size = page_size;
+    ULONG temp_old = 0;
+    protect_page(temp_protect_base, temp_protect_size, PAGE_EXECUTE_READ, &temp_old);
+
     // 7. Suspend threads to prevent race conditions during unmap/map
     std::vector<HANDLE> suspended_threads;
     suspend_all_threads(suspended_threads);
@@ -206,7 +267,9 @@ bool Phantom::install() {
 
     // Map our modified section into the exact same address
     SIZE_T map_size = page_size;
-    NTSTATUS map_status = syscalls::nt_map_view_of_section(h_section_, GetCurrentProcess(), &base_addr, 0, page_size, nullptr, &map_size, ViewUnmap, 0, PAGE_EXECUTE_READWRITE);
+    // Final view stays RWX: section-backed RX remaps are unstable on uninstall.
+    NTSTATUS map_status = syscalls::nt_map_view_of_section(
+        h_section_, GetCurrentProcess(), &base_addr, 0, page_size, nullptr, &map_size, ViewUnmap, 0, PAGE_EXECUTE_READWRITE);
 
     // Fix thread RIPs if they were executing in the overwritten hook bytes
     for (HANDLE hThread : suspended_threads) {
@@ -214,8 +277,12 @@ bool Phantom::install() {
         ctx.ContextFlags = CONTEXT_CONTROL;
         if (syscalls::nt_get_context_thread(hThread, &ctx) == syscalls::STATUS_SUCCESS) {
             if (ctx.Rip >= target_ && ctx.Rip < target_ + patch_size_) {
-                size_t offset = ctx.Rip - target_;
-                ctx.Rip = reinterpret_cast<uintptr_t>(trampoline_) + offset;
+                ctx.Rip = reloc::translate_runtime_ip(
+                    ctx.Rip,
+                    target_,
+                    patch_size_,
+                    reinterpret_cast<uint64_t>(trampoline_),
+                    reloc_sites_);
                 syscalls::nt_set_context_thread(hThread, &ctx);
             }
         }
@@ -241,14 +308,12 @@ bool Phantom::uninstall() {
     VEIL_JUNK_CODE();
     if (!is_installed_) return true;
 
-    // We cannot easily re-map the original DLL view because we don't know the exact 
-    // Section handle the kernel used when loading the DLL.
-    // However, since our custom view is RWX, we can simply write the original bytes back!
-    
     std::vector<HANDLE> suspended_threads;
     suspend_all_threads(suspended_threads);
 
-    // Write original bytes back
+    ULONG old_protect = 0;
+    protect_page(p_view_, page_size_, PAGE_EXECUTE_READWRITE, &old_protect);
+
     std::memcpy(reinterpret_cast<void*>(target_), original_bytes_.data(), patch_size_);
 
     for (HANDLE hThread : suspended_threads) {
@@ -256,8 +321,22 @@ bool Phantom::uninstall() {
         ctx.ContextFlags = CONTEXT_CONTROL;
         if (syscalls::nt_get_context_thread(hThread, &ctx) == syscalls::STATUS_SUCCESS) {
             if (ctx.Rip >= target_ && ctx.Rip < target_ + patch_size_) {
-                size_t offset = ctx.Rip - target_;
-                ctx.Rip = target_ + offset;
+                ctx.Rip = reloc::translate_runtime_ip(
+                    ctx.Rip,
+                    target_,
+                    patch_size_,
+                    reinterpret_cast<uint64_t>(trampoline_),
+                    reloc_sites_);
+                syscalls::nt_set_context_thread(hThread, &ctx);
+            } else if (trampoline_ &&
+                ctx.Rip >= reinterpret_cast<uint64_t>(trampoline_) &&
+                ctx.Rip < reinterpret_cast<uint64_t>(trampoline_) + trampoline_size_) {
+                ctx.Rip = reloc::translate_emit_ip_to_source(
+                    ctx.Rip,
+                    reinterpret_cast<uint64_t>(trampoline_),
+                    trampoline_size_,
+                    target_,
+                    reloc_sites_);
                 syscalls::nt_set_context_thread(hThread, &ctx);
             }
         }
