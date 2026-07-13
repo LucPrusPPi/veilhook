@@ -1,6 +1,5 @@
 #include <veilhook/cave_alloc.hpp>
 #include <veilhook/syscalls.hpp>
-#include <veilhook/xorstr.hpp>
 #include <tlhelp32.h>
 #include <psapi.h>
 #include <cmath>

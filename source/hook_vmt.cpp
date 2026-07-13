@@ -7,12 +7,16 @@
 namespace veilhook::hook {
 
 Vmt::Vmt(void* instance) {
-    if (!instance) throw std::invalid_argument("instance is null");
+    if (!instance) {
+        throw std::invalid_argument("");
+    }
 
     instance_vtable_ptr_ = reinterpret_cast<void**>(instance);
     original_vtable_ = *reinterpret_cast<uintptr_t**>(instance_vtable_ptr_);
-    
-    if (!original_vtable_) throw std::invalid_argument("original vtable is null");
+
+    if (!original_vtable_) {
+        throw std::invalid_argument("");
+    }
 
     vtable_size_ = count_vtable_methods(original_vtable_);
     
@@ -21,7 +25,9 @@ Vmt::Vmt(void* instance) {
     shadow_allocation_size_ = (vtable_size_ + 1) * sizeof(uintptr_t);
     uint8_t* mem = mem::CaveAlloc::get().allocate(reinterpret_cast<uintptr_t>(original_vtable_), shadow_allocation_size_);
     
-    if (!mem) throw std::runtime_error("Failed to allocate Shadow VMT");
+    if (!mem) {
+        throw std::runtime_error("");
+    }
 
     auto shadow_base = reinterpret_cast<uintptr_t*>(mem);
     

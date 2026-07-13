@@ -2,7 +2,7 @@
 #include <veilhook/cave_alloc.hpp>
 #include <veilhook/decode.hpp>
 #include <veilhook/thread_patch.hpp>
-#include <veilhook/xorstr.hpp>
+#include <veilhook/obfuscation.hpp>
 #include <asmjit/asmjit.h>
 #include <Zydis/Zydis.h>
 #include <Zydis/Utils.h>
