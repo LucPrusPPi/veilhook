@@ -7,3 +7,4 @@
 #include <veilhook/hook/inline.hpp>
 #include <veilhook/hook/mid.hpp>
 #include <veilhook/hook/vmt.hpp>
+#include <veilhook/hook/ud2.hpp>

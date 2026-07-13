@@ -1,4 +1,4 @@
-#include <veilhook/hook/inline.hpp>
+#include <veilhook/hook/ud2.hpp>
 #include <veilhook/cave_alloc.hpp>
 #include <veilhook/decode.hpp>
 #include <veilhook/thread_patch.hpp>
@@ -8,16 +8,20 @@
 #include <Zydis/Utils.h>
 #include <cstring>
 
+#ifndef STATUS_ILLEGAL_INSTRUCTION
+#define STATUS_ILLEGAL_INSTRUCTION 0xC000001D
+#endif
+
 namespace veilhook::hook {
 
-Inline::Inline(uintptr_t target, uintptr_t destination)
+Ud2::Ud2(uintptr_t target, uintptr_t destination)
     : target_(target), destination_(destination) {}
 
-Inline::~Inline() {
+Ud2::~Ud2() {
     uninstall();
 }
 
-bool Inline::install() {
+bool Ud2::install() {
     VEIL_JUNK_CODE();
     if (is_installed_) {
         last_status_ = InstallStatus::AlreadyInstalled;
@@ -26,7 +30,7 @@ bool Inline::install() {
 
     decode::InstructionView decoder;
 
-    patch_size_ = decoder.get_boundary_length(reinterpret_cast<uint8_t*>(target_), 5);
+    patch_size_ = decoder.get_boundary_length(reinterpret_cast<uint8_t*>(target_), 2);
     if (patch_size_ == 0) {
         last_status_ = InstallStatus::BadPrologue;
         return false;
@@ -105,7 +109,6 @@ bool Inline::install() {
     a.jmp(rax);
 
     asmjit::CodeBuffer& buffer = code.sectionById(0)->buffer();
-
     if (buffer.size() > trampoline_size_) {
         mem::CaveAlloc::get().deallocate(trampoline_, trampoline_size_);
         trampoline_ = nullptr;
@@ -115,23 +118,14 @@ bool Inline::install() {
 
     std::memcpy(trampoline_, buffer.data(), buffer.size());
 
-    std::vector<uint8_t> patch(patch_size_, 0x90);
+    veh_sub_ = veh::Hub::get().add_handler(
+        STATUS_ILLEGAL_INSTRUCTION,
+        200,
+        [this](PEXCEPTION_POINTERS ep) { return handle_exception(ep); });
 
-    int64_t rel_disp = static_cast<int64_t>(destination_) - static_cast<int64_t>(target_ + 5);
-    if (std::abs(rel_disp) <= 0x7FFFFFFF) {
-        patch[0] = 0xE9;
-        *reinterpret_cast<int32_t*>(&patch[1]) = static_cast<int32_t>(rel_disp);
-    } else if (patch_size_ >= 14) {
-        patch[0] = 0xFF;
-        patch[1] = 0x25;
-        *reinterpret_cast<int32_t*>(&patch[2]) = 0;
-        *reinterpret_cast<uint64_t*>(&patch[6]) = destination_;
-    } else {
-        mem::CaveAlloc::get().deallocate(trampoline_, trampoline_size_);
-        trampoline_ = nullptr;
-        last_status_ = InstallStatus::TrampolineTooFar;
-        return false;
-    }
+    std::vector<uint8_t> patch(patch_size_, 0x90);
+    patch[0] = 0x0F;
+    patch[1] = 0x0B;
 
     if (thread_patch::suspend_others_and_patch(target_, patch_size_, patch, trampoline_)) {
         is_installed_ = true;
@@ -139,25 +133,35 @@ bool Inline::install() {
         return true;
     }
 
+    veh_sub_.reset();
     mem::CaveAlloc::get().deallocate(trampoline_, trampoline_size_);
     trampoline_ = nullptr;
     last_status_ = InstallStatus::PatchFailed;
     return false;
 }
 
-bool Inline::uninstall() {
+bool Ud2::uninstall() {
     VEIL_JUNK_CODE();
     if (!is_installed_) {
         return true;
     }
 
     if (thread_patch::suspend_others_and_patch(target_, patch_size_, original_bytes_, nullptr)) {
+        veh_sub_.reset();
         is_installed_ = false;
         mem::CaveAlloc::get().deallocate(trampoline_, trampoline_size_);
         trampoline_ = nullptr;
         return true;
     }
 
+    return false;
+}
+
+bool Ud2::handle_exception(PEXCEPTION_POINTERS ep) {
+    if (ep->ContextRecord->Rip == target_) {
+        ep->ContextRecord->Rip = destination_;
+        return true;
+    }
     return false;
 }
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <veilhook/hook/status.hpp>
 #include <windows.h>
 #include <cstdint>
 #include <functional>
@@ -27,11 +28,13 @@ public:
 
     bool install();
     bool uninstall();
+    InstallStatus last_status() const { return last_status_; }
 
 private:
     uintptr_t target_;
     MidCallback callback_;
     bool is_installed_ = false;
+    InstallStatus last_status_ = InstallStatus::Ok;
 
     uint8_t* trampoline_ = nullptr;
     size_t trampoline_size_ = 0;

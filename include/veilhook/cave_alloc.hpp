@@ -11,8 +11,9 @@ class CaveAlloc {
 public:
     static CaveAlloc& get();
 
-    // Try to allocate an RX code cave within ±2GB of 'target'.
-    // If exact bounds cannot be satisfied, it will allocate a new page memory region.
+    // Try to allocate executable memory within ±2GB of target.
+    // Falls back to module caves, then a fresh page, then any free region.
+    // Returns nullptr only if NtAllocateVirtualMemory fails entirely.
     uint8_t* allocate(uintptr_t target, size_t size);
     
     void deallocate(uint8_t* ptr, size_t size);

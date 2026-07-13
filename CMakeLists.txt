@@ -44,6 +44,7 @@ target_sources(veilhook PRIVATE
     source/analyzer_prologue.cpp
     source/hook_guard.cpp
     source/hook_phantom.cpp
+    source/hook_ud2.cpp
 )
 
 target_include_directories(veilhook PUBLIC

@@ -6,6 +6,7 @@
 #include <mutex>
 #include <vector>
 
+#include <veilhook/hook/status.hpp>
 #include <veilhook/obfuscation.hpp>
 
 namespace veilhook::hook {
@@ -17,6 +18,7 @@ public:
 
     bool install();
     bool uninstall();
+    InstallStatus last_status() const { return last_status_; }
 
     template<typename T>
     T get_original() const {
@@ -39,6 +41,7 @@ private:
     std::vector<uint8_t> original_bytes_;
     size_t patch_size_ = 0;
     bool is_installed_ = false;
+    InstallStatus last_status_ = InstallStatus::Ok;
 
 };
 

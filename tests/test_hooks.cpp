@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <veilhook/veilhook.hpp>
 #include <veilhook/hook/phantom.hpp>
+#include <veilhook/hook/ud2.hpp>
 #include <veilhook/syscalls.hpp>
 
 // keep tests from inlining away the targets we hook
@@ -72,6 +73,43 @@ TEST(HookTests, InlineHookCallOriginal) {
     EXPECT_TRUE(inline_hook.install());
     EXPECT_EQ(target_function_math(5, 5), 36);
     EXPECT_TRUE(inline_hook.uninstall());
+}
+
+// --- UD2 Hook Tests ---
+
+TEST(HookTests, Ud2HookInstallUninstall) {
+    EXPECT_EQ(target_function_math(5, 5), 35);
+
+    veilhook::hook::Ud2 ud2_hook(
+        reinterpret_cast<uintptr_t>(&target_function_math),
+        reinterpret_cast<uintptr_t>(&target_function_math_hooked)
+    );
+
+    EXPECT_TRUE(ud2_hook.install());
+    EXPECT_EQ(ud2_hook.last_status(), veilhook::hook::InstallStatus::Ok);
+    EXPECT_EQ(target_function_math(5, 5), 350);
+
+    EXPECT_TRUE(ud2_hook.uninstall());
+    EXPECT_EQ(target_function_math(5, 5), 35);
+}
+
+TEST(HookTests, Ud2HookCallOriginal) {
+    static veilhook::hook::Ud2* hook_ptr = nullptr;
+    
+    auto hook_func = [](int a, int b) -> int {
+        auto orig = hook_ptr->get_original<decltype(&target_function_math)>();
+        return orig(a, b) + 1;
+    };
+
+    veilhook::hook::Ud2 ud2_hook(
+        reinterpret_cast<uintptr_t>(&target_function_math),
+        reinterpret_cast<uintptr_t>(+hook_func)
+    );
+    hook_ptr = &ud2_hook;
+
+    EXPECT_TRUE(ud2_hook.install());
+    EXPECT_EQ(target_function_math(5, 5), 36);
+    EXPECT_TRUE(ud2_hook.uninstall());
 }
 
 // --- Phantom Hook Tests ---

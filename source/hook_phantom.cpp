@@ -61,7 +61,10 @@ Phantom::~Phantom() {
 
 bool Phantom::install() {
     VEIL_JUNK_CODE();
-    if (is_installed_) return true;
+    if (is_installed_) {
+        last_status_ = InstallStatus::AlreadyInstalled;
+        return true;
+    }
 
     decode::InstructionView decoder;
     
@@ -73,7 +76,10 @@ bool Phantom::install() {
     }
 
     patch_size_ = decoder.get_boundary_length(reinterpret_cast<uint8_t*>(target_), required_jmp_size);
-    if (patch_size_ == 0) return false;
+    if (patch_size_ == 0) {
+        last_status_ = InstallStatus::BadPrologue;
+        return false;
+    }
 
     original_bytes_.resize(patch_size_);
     std::memcpy(original_bytes_.data(), reinterpret_cast<void*>(target_), patch_size_);
@@ -89,7 +95,7 @@ bool Phantom::install() {
     // If the hook crosses a page boundary, we'd need to remap 2 pages. 
     // For simplicity of MVP, we check if it fits in 1 page.
     if (offset_in_page + patch_size_ > page_size) {
-        // MVP: Cannot phantom hook across page boundaries easily without dual-mapping.
+        last_status_ = InstallStatus::PageBoundary;
         return false;
     }
 
@@ -101,7 +107,10 @@ bool Phantom::install() {
     
     trampoline_size_ = patch_size_ + 14; 
     trampoline_ = mem::CaveAlloc::get().allocate(target_, trampoline_size_);
-    if (!trampoline_) return false;
+    if (!trampoline_) {
+        last_status_ = InstallStatus::NoTrampolineMemory;
+        return false;
+    }
     
     // Assemble simple trampoline: [Original Bytes] + [JMP target_ + patch_size]
     std::memcpy(trampoline_, original_bytes_.data(), patch_size_);
@@ -128,6 +137,8 @@ bool Phantom::install() {
     NTSTATUS status = syscalls::nt_create_section(&h_section_, SECTION_ALL_ACCESS, nullptr, &max_size, PAGE_EXECUTE_READWRITE, SEC_COMMIT, nullptr);
     if (status != syscalls::STATUS_SUCCESS) {
         mem::CaveAlloc::get().deallocate(trampoline_, trampoline_size_);
+        trampoline_ = nullptr;
+        last_status_ = InstallStatus::SectionMapFailed;
         return false;
     }
 
@@ -139,6 +150,8 @@ bool Phantom::install() {
     if (status != syscalls::STATUS_SUCCESS) {
         CloseHandle(h_section_);
         mem::CaveAlloc::get().deallocate(trampoline_, trampoline_size_);
+        trampoline_ = nullptr;
+        last_status_ = InstallStatus::SectionMapFailed;
         return false;
     }
 
@@ -164,6 +177,8 @@ bool Phantom::install() {
             syscalls::nt_unmap_view_of_section(GetCurrentProcess(), temp_view);
             CloseHandle(h_section_);
             mem::CaveAlloc::get().deallocate(trampoline_, trampoline_size_);
+            trampoline_ = nullptr;
+            last_status_ = InstallStatus::TrampolineTooFar;
             return false;
         }
     }
@@ -184,6 +199,8 @@ bool Phantom::install() {
         syscalls::nt_unmap_view_of_section(GetCurrentProcess(), temp_view);
         CloseHandle(h_section_);
         mem::CaveAlloc::get().deallocate(trampoline_, trampoline_size_);
+        trampoline_ = nullptr;
+        last_status_ = InstallStatus::PatchFailed;
         return false;
     }
 
@@ -212,12 +229,12 @@ bool Phantom::install() {
     if (map_status == syscalls::STATUS_SUCCESS) {
         is_installed_ = true;
         p_view_ = base_addr;
+        last_status_ = InstallStatus::Ok;
         return true;
     }
 
-    // CRITICAL FAILURE: We unmapped the game's code but couldn't map ours!
-    // The game will likely crash if it hits this page.
-    return false; 
+    last_status_ = InstallStatus::SectionMapFailed;
+    return false;
 }
 
 bool Phantom::uninstall() {
