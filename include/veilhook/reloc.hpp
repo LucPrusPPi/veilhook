@@ -34,6 +34,7 @@ struct BranchSlotTable {
 
     asmjit::Label slot_for(asmjit::x86::Assembler& a, uint64_t destination);
     void emit_jump(asmjit::x86::Assembler& a, uint64_t destination) const;
+    void emit_call(asmjit::x86::Assembler& a, uint64_t destination) const;
     void emit_data(asmjit::x86::Assembler& a) const;
     bool empty() const { return order_.empty(); }
 
@@ -45,8 +46,11 @@ private:
 // push rax; mov rax, dest; xchg [rsp], rax; ret — no caller-visible register clobber.
 void emit_absolute_jump(asmjit::x86::Assembler& a, uint64_t destination);
 
-// push rax/r11 around an indirect call so both survive the synthesized branch.
-void emit_absolute_call(asmjit::x86::Assembler& a, uint64_t destination);
+// call qword ptr [rip+slot] — preserves shadow space and caller registers.
+void emit_absolute_call(
+    asmjit::x86::Assembler& a,
+    uint64_t destination,
+    BranchSlotTable& slots);
 
 // Relocate stolen prologue bytes into an asmjit code buffer.
 // stolen_runtime_base is the original in-image address of stolen[0].

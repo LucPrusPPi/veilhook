@@ -167,6 +167,50 @@ asmjit::x86::Gp zydis_to_gp(ZydisRegister reg) {
     }
 }
 
+void collect_used_gprs(
+    const ZydisDecodedInstruction& instruction,
+    const ZydisDecodedOperand* operands,
+    std::array<bool, 16>& used) {
+    using namespace asmjit::x86;
+
+    for (ZyanU8 i = 0; i < instruction.operand_count_visible; ++i) {
+        if (operands[i].type != ZYDIS_OPERAND_TYPE_REGISTER) {
+            continue;
+        }
+        const auto gp = zydis_to_gp(operands[i].reg.value);
+        if (gp.isValid()) {
+            used[static_cast<size_t>(gp.id())] = true;
+        }
+    }
+
+    if (instruction.mnemonic == ZYDIS_MNEMONIC_CMPXCHG) {
+        used[static_cast<size_t>(rax.id())] = true;
+    }
+}
+
+asmjit::x86::Gp pick_scratch_gpr(const std::array<bool, 16>& used) {
+    using namespace asmjit::x86;
+    for (const Gp candidate : {r11, r10, r9, r8}) {
+        if (!used[static_cast<size_t>(candidate.id())]) {
+            return candidate;
+        }
+    }
+    return Gp();
+}
+
+std::pair<asmjit::x86::Gp, asmjit::x86::Gp> pick_two_scratch_gprs(
+    const std::array<bool, 16>& used) {
+    const asmjit::x86::Gp first = pick_scratch_gpr(used);
+    if (!first.isValid()) {
+        return {asmjit::x86::Gp(), asmjit::x86::Gp()};
+    }
+
+    std::array<bool, 16> extended = used;
+    extended[static_cast<size_t>(first.id())] = true;
+    const asmjit::x86::Gp second = pick_scratch_gpr(extended);
+    return {first, second};
+}
+
 asmjit::x86::Mem sized_mem_ptr(asmjit::x86::Gp base, const ZydisDecodedOperand& mem_op) {
     using namespace asmjit::x86;
     switch (mem_op.size) {
@@ -346,13 +390,44 @@ Status emit_rip_memory_translation(
         return Status::Ok;
     }
 
-    a.push(r11);
-    a.mov(r11, absolute);
-    const Mem mem = sized_mem_ptr(r11, *mem_op);
+    std::array<bool, 16> used{};
+    collect_used_gprs(instruction, operands, used);
+
+    if (!mem_is_dest &&
+        (instruction.mnemonic == ZYDIS_MNEMONIC_CMP ||
+         instruction.mnemonic == ZYDIS_MNEMONIC_TEST) &&
+        other && other->type == ZYDIS_OPERAND_TYPE_REGISTER && !mem_before_other) {
+        const auto [addr_scratch, temp_scratch] = pick_two_scratch_gprs(used);
+        if (!temp_scratch.isValid()) {
+            return Status::UnsupportedInstruction;
+        }
+
+        a.push(addr_scratch);
+        a.mov(addr_scratch, absolute);
+        a.push(temp_scratch);
+        a.mov(temp_scratch, sized_mem_ptr(addr_scratch, *mem_op));
+        if (instruction.mnemonic == ZYDIS_MNEMONIC_CMP) {
+            a.cmp(zydis_to_gp(other->reg.value), temp_scratch);
+        } else {
+            a.test(zydis_to_gp(other->reg.value), temp_scratch);
+        }
+        a.pop(temp_scratch);
+        a.pop(addr_scratch);
+        return Status::Ok;
+    }
+
+    const asmjit::x86::Gp addr_scratch = pick_scratch_gpr(used);
+    if (!addr_scratch.isValid()) {
+        return Status::UnsupportedInstruction;
+    }
+
+    a.push(addr_scratch);
+    a.mov(addr_scratch, absolute);
+    const Mem mem = sized_mem_ptr(addr_scratch, *mem_op);
 
     if (mem_is_dest) {
         if (!other || other->type != ZYDIS_OPERAND_TYPE_REGISTER) {
-            a.pop(r11);
+            a.pop(addr_scratch);
             return Status::UnsupportedInstruction;
         }
         switch (instruction.mnemonic) {
@@ -387,7 +462,7 @@ Status emit_rip_memory_translation(
             break;
         case ZYDIS_MNEMONIC_CMPXCHG:
             if (!other || other->type != ZYDIS_OPERAND_TYPE_REGISTER) {
-                a.pop(r11);
+                a.pop(addr_scratch);
                 return Status::UnsupportedInstruction;
             }
             a.lock();
@@ -398,14 +473,14 @@ Status emit_rip_memory_translation(
         case ZYDIS_MNEMONIC_NOT: a.not_(mem); break;
         case ZYDIS_MNEMONIC_NEG: a.neg(mem); break;
         default:
-            a.pop(r11);
+            a.pop(addr_scratch);
             return Status::UnsupportedInstruction;
         }
     } else {
         switch (instruction.mnemonic) {
         case ZYDIS_MNEMONIC_MOV: {
             if (!other) {
-                a.pop(r11);
+                a.pop(addr_scratch);
                 return Status::UnsupportedInstruction;
             }
             if (other->type == ZYDIS_OPERAND_TYPE_REGISTER) {
@@ -420,14 +495,14 @@ Status emit_rip_memory_translation(
                     a.mov(mem, other->imm.value.u);
                 }
             } else {
-                a.pop(r11);
+                a.pop(addr_scratch);
                 return Status::UnsupportedInstruction;
             }
             break;
         }
         case ZYDIS_MNEMONIC_CMPXCHG: {
             if (!other || other->type != ZYDIS_OPERAND_TYPE_REGISTER) {
-                a.pop(r11);
+                a.pop(addr_scratch);
                 return Status::UnsupportedInstruction;
             }
             a.lock();
@@ -436,18 +511,11 @@ Status emit_rip_memory_translation(
         }
         case ZYDIS_MNEMONIC_CMP: {
             if (!other) {
-                a.pop(r11);
+                a.pop(addr_scratch);
                 return Status::UnsupportedInstruction;
             }
             if (other->type == ZYDIS_OPERAND_TYPE_REGISTER) {
-                if (mem_before_other) {
-                    a.cmp(mem, zydis_to_gp(other->reg.value));
-                } else {
-                    a.push(r10);
-                    a.mov(r10, mem);
-                    a.cmp(zydis_to_gp(other->reg.value), r10);
-                    a.pop(r10);
-                }
+                a.cmp(mem, zydis_to_gp(other->reg.value));
             } else if (other->imm.is_signed) {
                 a.cmp(mem, other->imm.value.s);
             } else {
@@ -457,18 +525,11 @@ Status emit_rip_memory_translation(
         }
         case ZYDIS_MNEMONIC_TEST: {
             if (!other) {
-                a.pop(r11);
+                a.pop(addr_scratch);
                 return Status::UnsupportedInstruction;
             }
             if (other->type == ZYDIS_OPERAND_TYPE_REGISTER) {
-                if (mem_before_other) {
-                    a.test(mem, zydis_to_gp(other->reg.value));
-                } else {
-                    a.push(r10);
-                    a.mov(r10, mem);
-                    a.test(zydis_to_gp(other->reg.value), r10);
-                    a.pop(r10);
-                }
+                a.test(mem, zydis_to_gp(other->reg.value));
             } else if (other->imm.is_signed) {
                 a.test(mem, other->imm.value.s);
             } else {
@@ -477,12 +538,12 @@ Status emit_rip_memory_translation(
             break;
         }
         default:
-            a.pop(r11);
+            a.pop(addr_scratch);
             return Status::UnsupportedInstruction;
         }
     }
 
-    a.pop(r11);
+    a.pop(addr_scratch);
     return Status::Ok;
 }
 
@@ -575,7 +636,8 @@ Status emit_relative_control_flow(
     }
 
     if (instruction.meta.category == ZYDIS_CATEGORY_CALL) {
-        emit_absolute_call(a, absolute_target);
+        branch_slots.slot_for(a, absolute_target);
+        branch_slots.emit_call(a, absolute_target);
         return Status::Ok;
     }
 
@@ -616,6 +678,15 @@ void BranchSlotTable::emit_jump(asmjit::x86::Assembler& a, uint64_t destination)
     a.jmp(qword_ptr(found->second));
 }
 
+void BranchSlotTable::emit_call(asmjit::x86::Assembler& a, uint64_t destination) const {
+    using namespace asmjit::x86;
+    const auto found = slots_.find(destination);
+    if (found == slots_.end()) {
+        return;
+    }
+    a.call(qword_ptr(found->second));
+}
+
 void BranchSlotTable::emit_data(asmjit::x86::Assembler& a) const {
     for (const auto& [label, destination] : order_) {
         a.bind(label);
@@ -635,14 +706,12 @@ void emit_absolute_jump(asmjit::x86::Assembler& a, uint64_t destination) {
     a.ret();
 }
 
-void emit_absolute_call(asmjit::x86::Assembler& a, uint64_t destination) {
-    using namespace asmjit::x86;
-    a.push(rax);
-    a.push(r11);
-    a.mov(r11, destination);
-    a.call(r11);
-    a.pop(r11);
-    a.pop(rax);
+void emit_absolute_call(
+    asmjit::x86::Assembler& a,
+    uint64_t destination,
+    BranchSlotTable& slots) {
+    slots.slot_for(a, destination);
+    slots.emit_call(a, destination);
 }
 
 uint64_t translate_runtime_ip(

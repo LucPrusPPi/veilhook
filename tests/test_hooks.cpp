@@ -340,6 +340,77 @@ TEST(RelocTests, TrampolineRipRelDispOverflow) {
     veilhook::mem::CaveAlloc::get().deallocate(tramp, alloc_size);
 }
 
+struct RipRelStoreR11Block {
+    uint8_t code[16]{};
+    uint64_t slot = 0;
+};
+
+static void write_store_r11_from_rcx(uint8_t* code, uintptr_t code_runtime, void* slot) {
+    code[0] = 0x4C;
+    code[1] = 0x8B;
+    code[2] = 0xD9;
+    code[3] = 0x4C;
+    code[4] = 0x89;
+    code[5] = 0x1D;
+    const int32_t disp = static_cast<int32_t>(
+        reinterpret_cast<uintptr_t>(slot) - (code_runtime + 10));
+    std::memcpy(code + 6, &disp, sizeof(disp));
+}
+
+TEST(RelocTests, TrampolineRipRelStoreR11) {
+    auto* block = static_cast<RipRelStoreR11Block*>(VirtualAlloc(
+        nullptr, sizeof(RipRelStoreR11Block), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+    ASSERT_NE(block, nullptr);
+
+    const uintptr_t stolen_base = reinterpret_cast<uintptr_t>(block->code);
+    write_store_r11_from_rcx(block->code, stolen_base, &block->slot);
+    block->code[10] = 0xC3;
+    constexpr size_t patch_size = 10;
+
+    const auto original_fn = reinterpret_cast<void(*)(uint64_t)>(
+        static_cast<void*>(block->code));
+    original_fn(0x1234567890ABCDEFULL);
+    ASSERT_EQ(block->slot, 0x1234567890ABCDEFULL);
+    block->slot = 0;
+
+    const size_t alloc_size = patch_size * 8 + 256;
+    uint8_t* tramp = veilhook::mem::CaveAlloc::get().allocate(
+        stolen_base, alloc_size);
+    ASSERT_NE(tramp, nullptr);
+
+    veilhook::decode::InstructionView decoder;
+    asmjit::JitRuntime rt;
+    asmjit::CodeHolder code;
+    code.init(rt.environment(), reinterpret_cast<uint64_t>(tramp));
+    asmjit::x86::Assembler a(&code);
+
+    const uint64_t far_emit_base = stolen_base + 0x100000000ULL;
+    veilhook::reloc::BranchSlotTable branch_slots;
+    const auto reloc_status = veilhook::reloc::emit_stolen_range(
+        a,
+        decoder.zydis_decoder(),
+        block->code,
+        patch_size,
+        stolen_base,
+        far_emit_base,
+        nullptr,
+        &branch_slots);
+    ASSERT_EQ(reloc_status, veilhook::reloc::Status::Ok);
+
+    veilhook::reloc::emit_absolute_jump(a, stolen_base + patch_size);
+    veilhook::reloc::emit_branch_slot_data(a, branch_slots);
+
+    asmjit::CodeBuffer& buffer = code.sectionById(0)->buffer();
+    std::memcpy(tramp, buffer.data(), buffer.size());
+
+    const auto fn = reinterpret_cast<void(*)(uint64_t)>(tramp);
+    fn(0xABCDEF0123456789ULL);
+    EXPECT_EQ(block->slot, 0xABCDEF0123456789ULL);
+
+    veilhook::mem::CaveAlloc::get().deallocate(tramp, alloc_size);
+    VirtualFree(block, 0, MEM_RELEASE);
+}
+
 alignas(16) volatile float g_vec4_value[4] = {1.0f, 2.0f, 3.0f, 4.0f};
 
 __declspec(noinline) float target_with_vec_riprel() {
