@@ -1,11 +1,10 @@
 #include <veilhook/hook/ud2.hpp>
 #include <veilhook/cave_alloc.hpp>
 #include <veilhook/decode.hpp>
+#include <veilhook/reloc.hpp>
 #include <veilhook/thread_patch.hpp>
 #include <veilhook/obfuscation.hpp>
 #include <asmjit/asmjit.h>
-#include <Zydis/Zydis.h>
-#include <Zydis/Utils.h>
 #include <cstring>
 
 #ifndef STATUS_ILLEGAL_INSTRUCTION
@@ -39,7 +38,7 @@ bool Ud2::install() {
     original_bytes_.resize(patch_size_);
     std::memcpy(original_bytes_.data(), reinterpret_cast<void*>(target_), patch_size_);
 
-    trampoline_size_ = patch_size_ + 128;
+    trampoline_size_ = patch_size_ * 4 + 128;
     trampoline_ = mem::CaveAlloc::get().allocate(target_, trampoline_size_);
     if (!trampoline_) {
         last_status_ = InstallStatus::NoTrampolineMemory;
@@ -55,58 +54,23 @@ bool Ud2::install() {
 
     original_callable_ = trampoline_;
 
-    uint8_t* current = original_bytes_.data();
-    size_t processed = 0;
+    const auto reloc_status = reloc::emit_stolen_range(
+        a,
+        decoder.zydis_decoder(),
+        original_bytes_.data(),
+        patch_size_,
+        static_cast<uint64_t>(target_),
+        reinterpret_cast<uint64_t>(trampoline_));
 
-    while (processed < patch_size_) {
-        ZydisDecodedInstruction zydis_inst = decoder.decode_advanced(current);
-        if (zydis_inst.length == 0) {
-            break;
-        }
-
-        if (zydis_inst.meta.category == ZYDIS_CATEGORY_COND_BR ||
-            zydis_inst.meta.category == ZYDIS_CATEGORY_UNCOND_BR ||
-            zydis_inst.meta.category == ZYDIS_CATEGORY_CALL) {
-
-            const ZydisDecodedOperand* op = nullptr;
-            for (int i = 0; i < zydis_inst.operand_count; ++i) {
-                ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
-                ZydisDecoderDecodeOperands(
-                    &decoder.zydis_decoder(), nullptr, &zydis_inst, operands, zydis_inst.operand_count);
-
-                if (operands[i].type == ZYDIS_OPERAND_TYPE_IMMEDIATE && operands[i].imm.is_relative) {
-                    op = &operands[i];
-
-                    uint64_t absolute_target = 0;
-                    ZydisCalcAbsoluteAddress(
-                        &zydis_inst, op, static_cast<uint64_t>(target_ + processed), &absolute_target);
-
-                    if (zydis_inst.meta.category == ZYDIS_CATEGORY_CALL) {
-                        a.mov(rax, absolute_target);
-                        a.call(rax);
-                    } else if (zydis_inst.meta.category == ZYDIS_CATEGORY_UNCOND_BR) {
-                        a.mov(rax, absolute_target);
-                        a.jmp(rax);
-                    } else {
-                        a.embed(current, zydis_inst.length);
-                    }
-                    break;
-                }
-            }
-
-            if (!op) {
-                a.embed(current, zydis_inst.length);
-            }
-        } else {
-            a.embed(current, zydis_inst.length);
-        }
-
-        current += zydis_inst.length;
-        processed += zydis_inst.length;
+    if (reloc_status != reloc::Status::Ok) {
+        mem::CaveAlloc::get().deallocate(trampoline_, trampoline_size_);
+        trampoline_ = nullptr;
+        last_status_ = InstallStatus::RelocFailed;
+        return false;
     }
 
-    a.mov(rax, target_ + patch_size_);
-    a.jmp(rax);
+    a.mov(asmjit::x86::r11, target_ + patch_size_);
+    a.jmp(asmjit::x86::r11);
 
     asmjit::CodeBuffer& buffer = code.sectionById(0)->buffer();
     if (buffer.size() > trampoline_size_) {

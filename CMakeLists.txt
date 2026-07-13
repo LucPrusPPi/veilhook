@@ -32,6 +32,7 @@ add_library(veilhook STATIC)
 
 target_sources(veilhook PRIVATE
     source/decode.cpp
+    source/reloc.cpp
     source/thread_patch.cpp
     source/hwbp_manager.cpp
     source/veh_hub.cpp

@@ -1,6 +1,7 @@
 #include <veilhook/hook/mid.hpp>
 #include <veilhook/cave_alloc.hpp>
 #include <veilhook/decode.hpp>
+#include <veilhook/reloc.hpp>
 #include <veilhook/thread_patch.hpp>
 #include <asmjit/asmjit.h>
 #include <cstring>
@@ -36,9 +37,16 @@ bool Mid::install() {
     original_bytes_.resize(patch_size_);
     std::memcpy(original_bytes_.data(), reinterpret_cast<void*>(target_), patch_size_);
 
+    trampoline_size_ = patch_size_ * 4 + 512;
+    trampoline_ = mem::CaveAlloc::get().allocate(target_, trampoline_size_);
+    if (!trampoline_) {
+        last_status_ = InstallStatus::NoTrampolineMemory;
+        return false;
+    }
+
     asmjit::JitRuntime rt;
     asmjit::CodeHolder code;
-    code.init(rt.environment());
+    code.init(rt.environment(), reinterpret_cast<uint64_t>(trampoline_));
     asmjit::x86::Assembler a(&code);
 
     using namespace asmjit::x86;
@@ -96,20 +104,36 @@ bool Mid::install() {
     a.popfq();
     a.lea(rsp, ptr(rsp, 8));
 
-    a.embed(original_bytes_.data(), original_bytes_.size());
+    const uint64_t stolen_emit_base =
+        reinterpret_cast<uint64_t>(trampoline_) + static_cast<uint64_t>(a.offset());
 
-    a.mov(rax, target_ + patch_size_);
-    a.jmp(rax);
+    const auto reloc_status = reloc::emit_stolen_range(
+        a,
+        decoder.zydis_decoder(),
+        original_bytes_.data(),
+        original_bytes_.size(),
+        static_cast<uint64_t>(target_),
+        stolen_emit_base);
 
-    asmjit::CodeBuffer& buffer = code.sectionById(0)->buffer();
-    trampoline_size_ = buffer.size();
-
-    trampoline_ = mem::CaveAlloc::get().allocate(target_, trampoline_size_);
-    if (!trampoline_) {
-        last_status_ = InstallStatus::NoTrampolineMemory;
+    if (reloc_status != reloc::Status::Ok) {
+        mem::CaveAlloc::get().deallocate(trampoline_, trampoline_size_);
+        trampoline_ = nullptr;
+        last_status_ = InstallStatus::RelocFailed;
         return false;
     }
 
+    a.mov(r11, target_ + patch_size_);
+    a.jmp(r11);
+
+    asmjit::CodeBuffer& buffer = code.sectionById(0)->buffer();
+    if (buffer.size() > trampoline_size_) {
+        mem::CaveAlloc::get().deallocate(trampoline_, trampoline_size_);
+        trampoline_ = nullptr;
+        last_status_ = InstallStatus::TrampolineOverflow;
+        return false;
+    }
+
+    trampoline_size_ = buffer.size();
     std::memcpy(trampoline_, buffer.data(), trampoline_size_);
 
     std::vector<uint8_t> patch(patch_size_, 0x90);

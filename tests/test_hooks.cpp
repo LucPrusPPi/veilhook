@@ -1,11 +1,27 @@
 #include <gtest/gtest.h>
 #include <veilhook/veilhook.hpp>
+#include <veilhook/decode.hpp>
+#include <veilhook/reloc.hpp>
 #include <veilhook/hook/phantom.hpp>
 #include <veilhook/hook/ud2.hpp>
 #include <veilhook/syscalls.hpp>
+#include <veilhook/cave_alloc.hpp>
+#include <asmjit/asmjit.h>
+#include <cstring>
+#include <vector>
 
 // keep tests from inlining away the targets we hook
 #pragma optimize("", off)
+
+volatile int g_reloc_test_value = 100;
+
+__declspec(noinline) int target_with_riprel() {
+    return g_reloc_test_value;
+}
+
+__declspec(noinline) int target_with_riprel_hooked() {
+    return g_reloc_test_value * 2;
+}
 
 // --- Helper Functions ---
 __declspec(noinline) int target_function_math(int a, int b) {
@@ -72,6 +88,44 @@ TEST(HookTests, InlineHookCallOriginal) {
 
     EXPECT_TRUE(inline_hook.install());
     EXPECT_EQ(target_function_math(5, 5), 36);
+    EXPECT_TRUE(inline_hook.uninstall());
+}
+
+TEST(HookTests, InlineHookRipRelativePrologue) {
+    g_reloc_test_value = 100;
+    EXPECT_EQ(target_with_riprel(), 100);
+
+    veilhook::hook::Inline inline_hook(
+        reinterpret_cast<uintptr_t>(&target_with_riprel),
+        reinterpret_cast<uintptr_t>(&target_with_riprel_hooked)
+    );
+
+    EXPECT_TRUE(inline_hook.install());
+    EXPECT_EQ(inline_hook.last_status(), veilhook::hook::InstallStatus::Ok);
+    EXPECT_EQ(target_with_riprel(), 200);
+
+    EXPECT_TRUE(inline_hook.uninstall());
+    EXPECT_EQ(target_with_riprel(), 100);
+}
+
+TEST(HookTests, InlineHookCallOriginalRipRelative) {
+    static veilhook::hook::Inline* hook_ptr = nullptr;
+
+    auto hook_func = []() -> int {
+        auto orig = hook_ptr->get_original<decltype(&target_with_riprel)>();
+        return orig() + 7;
+    };
+
+    g_reloc_test_value = 50;
+
+    veilhook::hook::Inline inline_hook(
+        reinterpret_cast<uintptr_t>(&target_with_riprel),
+        reinterpret_cast<uintptr_t>(+hook_func)
+    );
+    hook_ptr = &inline_hook;
+
+    EXPECT_TRUE(inline_hook.install());
+    EXPECT_EQ(target_with_riprel(), 57);
     EXPECT_TRUE(inline_hook.uninstall());
 }
 
@@ -197,6 +251,48 @@ TEST(HookTests, VMTHook) {
 
 // --- Scanner Tests ---
 #include <veilhook/scanner.hpp>
+
+TEST(RelocTests, TrampolineRipRelDirect) {
+    g_reloc_test_value = 42;
+
+    veilhook::decode::InstructionView decoder;
+    auto* target = reinterpret_cast<uint8_t*>(&target_with_riprel);
+    const size_t patch_size = decoder.get_boundary_length(target, 5);
+    ASSERT_GT(patch_size, 0u);
+
+    std::vector<uint8_t> stolen(patch_size);
+    std::memcpy(stolen.data(), target, patch_size);
+
+    const size_t alloc_size = patch_size * 4 + 64;
+    uint8_t* tramp = veilhook::mem::CaveAlloc::get().allocate(
+        reinterpret_cast<uintptr_t>(target), alloc_size);
+    ASSERT_NE(tramp, nullptr);
+
+    asmjit::JitRuntime rt;
+    asmjit::CodeHolder code;
+    code.init(rt.environment(), reinterpret_cast<uint64_t>(tramp));
+    asmjit::x86::Assembler a(&code);
+
+    const auto reloc_status = veilhook::reloc::emit_stolen_range(
+        a,
+        decoder.zydis_decoder(),
+        stolen.data(),
+        patch_size,
+        reinterpret_cast<uint64_t>(target),
+        reinterpret_cast<uint64_t>(tramp));
+    ASSERT_EQ(reloc_status, veilhook::reloc::Status::Ok);
+
+    a.mov(asmjit::x86::r11, reinterpret_cast<uint64_t>(target) + patch_size);
+    a.jmp(asmjit::x86::r11);
+
+    asmjit::CodeBuffer& buffer = code.sectionById(0)->buffer();
+    std::memcpy(tramp, buffer.data(), buffer.size());
+
+    const auto fn = reinterpret_cast<int(*)()>(tramp);
+    EXPECT_EQ(fn(), 42);
+
+    veilhook::mem::CaveAlloc::get().deallocate(tramp, alloc_size);
+}
 
 TEST(ScannerTests, BasicPatternSearch) {
     uint8_t buffer[] = {

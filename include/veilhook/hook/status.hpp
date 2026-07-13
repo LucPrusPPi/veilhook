@@ -10,6 +10,7 @@ enum class InstallStatus {
     TrampolineOverflow,
     TrampolineTooFar,
     PatchFailed,
+    RelocFailed,
     PageBoundary,
     SectionMapFailed,
 };
