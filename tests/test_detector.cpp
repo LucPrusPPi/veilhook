@@ -89,20 +89,16 @@ TEST(DetectorTests, DetectPhantomHook) {
         reinterpret_cast<uintptr_t>(&detector_dummy_hook)
     );
 
-    if (phantom_hook.install()) {
-        auto detection = veilhook::analyzer::Detector::check_memory(reinterpret_cast<uintptr_t>(p_view));
-        EXPECT_TRUE(detection.is_hooked);
-        EXPECT_TRUE(detection.type == veilhook::analyzer::HookType::InlineNearJmp || 
-                    detection.type == veilhook::analyzer::HookType::InlineFarJmp);
-        
-        phantom_hook.uninstall();
-    } else {
-        veilhook::syscalls::nt_unmap_view_of_section(GetCurrentProcess(), p_view);
-        CloseHandle(h_section);
-        GTEST_SKIP() << "Phantom hook failed to install";
-    }
+    ASSERT_TRUE(phantom_hook.install());
+    ASSERT_EQ(phantom_hook.last_status(), veilhook::hook::InstallStatus::Ok);
 
-    // Clean up
+    auto detection = veilhook::analyzer::Detector::check_memory(reinterpret_cast<uintptr_t>(p_view));
+    EXPECT_TRUE(detection.is_hooked);
+    EXPECT_TRUE(detection.type == veilhook::analyzer::HookType::InlineNearJmp ||
+                detection.type == veilhook::analyzer::HookType::InlineFarJmp);
+
+    EXPECT_TRUE(phantom_hook.uninstall());
+
     veilhook::syscalls::nt_unmap_view_of_section(GetCurrentProcess(), p_view);
     CloseHandle(h_section);
 }

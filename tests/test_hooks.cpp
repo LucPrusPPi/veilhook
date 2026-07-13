@@ -212,18 +212,11 @@ TEST(HookTests, PhantomHookInstallUninstall) {
         reinterpret_cast<uintptr_t>(&target_function_math_hooked)
     );
 
-    bool installed = phantom_hook.install();
-    if (installed) {
-        EXPECT_EQ(target_func_in_view(2, 3), 200);
-        EXPECT_TRUE(phantom_hook.uninstall());
-    } else {
-        // Fallback clean up
-        veilhook::syscalls::nt_unmap_view_of_section(GetCurrentProcess(), p_view);
-        CloseHandle(h_section);
-        GTEST_SKIP() << "Phantom hook failed to install (possibly crosses page boundary)";
-    }
+    ASSERT_TRUE(phantom_hook.install());
+    ASSERT_EQ(phantom_hook.last_status(), veilhook::hook::InstallStatus::Ok);
+    EXPECT_EQ(target_func_in_view(2, 3), 200);
+    EXPECT_TRUE(phantom_hook.uninstall());
 
-    // Clean up
     veilhook::syscalls::nt_unmap_view_of_section(GetCurrentProcess(), p_view);
     CloseHandle(h_section);
 }
